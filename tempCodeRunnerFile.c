@@ -1,0 +1,1 @@
+unsigned char tape[30000] = {0};
