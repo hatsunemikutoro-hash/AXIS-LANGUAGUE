@@ -1,0 +1,29 @@
+{
+  "scopeName": "source.axis",
+  "patterns": [
+    {
+      "name": "comment.line.dollar.axis",
+      "match": "\\$.*$"
+    },
+    {
+      "name": "keyword.control.axis",
+      "match": "\\b(REPETE|CARREGAR|SAIR|ENTRADA)\\b"
+    },
+    {
+      "name": "keyword.operator.axis",
+      "match": "\\b(MAIS|MENOS|SOMA|ZERAR|DIREITA|ESQUERDA|IR)\\b"
+    },
+    {
+      "name": "support.function.axis",
+      "match": "\\b(FALAR|VALOR|NOMEAR)\\b"
+    },
+    {
+      "name": "constant.numeric.axis",
+      "match": "\\b[0-9]+\\b"
+    },
+    {
+      "name": "constant.numeric.axis",
+      "match": "\\b[0-9]+\\b"
+    }
+  ]
+}

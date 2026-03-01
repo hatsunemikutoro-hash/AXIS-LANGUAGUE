@@ -1,0 +1,12 @@
+{
+    "id": "axis-icon-theme",
+    "name": "AXIS File Icons",
+    "iconDefinitions": {
+        "axis_icon_def": {
+            "iconPath": "./icons/axis_icon.svg"
+        }
+    },
+    "fileExtensions": {
+        "axis": "axis_icon_def"
+    }
+}
