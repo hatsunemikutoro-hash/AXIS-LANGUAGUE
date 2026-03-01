@@ -1,0 +1,7 @@
+$ Teste de Soma Interativa
+ENTRADA    $ Digite 10
+DIREITA    $ Move para o próximo quadrado
+ENTRADA    $ Digite 20
+ESQUERDA   $ Volta para o primeiro quadrado
+SOMA 1     $ Soma o valor do quadrado da direita (20) ao atual (10)
+VALOR      $ Deve imprimir 30
