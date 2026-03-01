@@ -1,6 +1,6 @@
 # 🚀 AXIS Language
 
-![AXIS Logo](logo.png)
+![AXIS Logo](EXTENSION/axis-extension/logo.png)
 
 > **"Só fiz por diversão, não é pra ser nada grande nem profissional"**
 
