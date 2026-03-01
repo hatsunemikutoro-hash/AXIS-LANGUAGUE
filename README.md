@@ -48,3 +48,6 @@ Siga os passos abaixo para compilar o interpretador e rodar seu primeiro código
 | **IR** | Pula para uma posição ou variável. | `IR X` |
 | **REPETE** | Cria um loop que executa o bloco `[ ]`. | `REPETE 5 [ MAIS ]` |
 | **ZERAR** | Zera o valor do quadrado atual. | `ZERAR` |
+
+
+atualmente eu não sei o poder total dessa linguagem, se você conseguir fazer algo legal, ou tiver sugestões por favor me contate!!
