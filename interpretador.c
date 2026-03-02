@@ -8,6 +8,48 @@ typedef struct
     int endereco;
 } Variavel;
 
+typedef struct {
+    char nome[50];
+    long posicao;
+} Rotulo;
+
+FILE *arquivo_global = NULL; // A GAMBIARRA DOS DEUSES
+Rotulo mapa_de_rotulos[100]; 
+int total_rotulos = 0;
+
+void mapear_rotulo(FILE *arquivo) {
+    char comando[50];
+    char nome_rotulo[50];
+    long posicao;
+
+    rewind(arquivo);
+
+    while (fscanf(arquivo, "%s", comando) != EOF)
+    {
+        if (strcmp(comando, "ROTULO") == 0) {
+            posicao = ftell(arquivo);
+            fscanf(arquivo, "%s", nome_rotulo);
+
+            strcpy(mapa_de_rotulos[total_rotulos].nome, nome_rotulo);
+            mapa_de_rotulos[total_rotulos].posicao = posicao;
+
+            printf("LOG: Rotulo '%s' mapeado na posicao %ld\n", nome_rotulo, posicao);
+            total_rotulos++;
+        }
+    }
+    
+}
+
+long buscar_linha_do_rotulo(char *nome) {
+    for (int i = 0; i < total_rotulos; i++)
+    {
+        if (strcmp(mapa_de_rotulos[i].nome, nome) == 0) {
+            return mapa_de_rotulos[i].posicao;
+        }
+    }
+    printf("ERRO DA AXIS: Rotulo '%s' nao encontrado!\n", nome);
+    return -1;
+}
 
 void executar(char *comando, unsigned char **ptr_ref, unsigned char *tapebase, Variavel *agenda, int *total) {
     // REGRAS PARA NÃO ERRAR MAIS:
@@ -17,7 +59,15 @@ void executar(char *comando, unsigned char **ptr_ref, unsigned char *tapebase, V
 
     if (strcmp(comando, "MAIS") == 0) {
         (**ptr_ref)++; // Soma no VALOR
-    } 
+    }  else if (strcmp(comando, "PULAR") == 0) {
+        char *nome_alvo = strtok(NULL, " \n\r");
+        if  (nome_alvo && arquivo_global) {
+            long endereco = buscar_linha_do_rotulo(nome_alvo);
+            if (endereco != -1) {
+                fseek(arquivo_global, endereco, SEEK_SET);
+            }
+        }
+    }
     else if (strcmp(comando, "SOMA") == 0 || strcmp(comando, "SOMAR") == 0) {
         char *valor_texto = strtok(NULL, " \n\r");
         if (valor_texto) (**ptr_ref) += atoi(valor_texto);
@@ -156,22 +206,28 @@ void interpretar_linha(char *linha, unsigned char **ptr_ref, unsigned char *tape
     }
 
 
-int main() {
+int main(int argc, char*argv[]) {
     char code[500];
     Variavel agenda[50];
     int total_nomes = 0;
     unsigned char tape[30000] = {0};
     unsigned char *ptr = tape;
 
-    printf("--- AXIS INTERPRETER v1.1 ---\n");
-    printf("------------------------------------\n\n");
-
-    while (1) {
-        printf(">> ");
-        if (fgets(code, sizeof(code), stdin) == NULL) break;
-        if (strcmp(code, "SAIR\n") == 0) break;
-
-        interpretar_linha(code, &ptr, tape, agenda, &total_nomes);
+    FILE *f = fopen(argv[1], "r");
+    if (f == NULL) {
+        printf("[ERRO]");
+        return 1;
     }
+    arquivo_global = f; // <--- AQUI A MÁGICA ACONTECE!
+
+    mapear_rotulo(arquivo_global);
+    rewind(arquivo_global);
+
+    char linha[500];
+    while (fgets(linha, sizeof(linha), arquivo_global)) {
+        interpretar_linha(linha, &ptr, tape, agenda, &total_nomes);
+    }
+
+    fclose(f);
     return 0;
 }
