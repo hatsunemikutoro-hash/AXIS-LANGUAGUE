@@ -160,18 +160,19 @@ void executar(char *comando, unsigned char **ptr_ref, unsigned char *tapebase, V
 }
 
 void interpretar_linha(char *linha, unsigned char **ptr_ref, unsigned char *tapebase, Variavel *agenda, int *total) {
-    // suporte a comentario
+    // 1. Suporte a comentário
     char *comentario = strstr(linha, "$");
-    if (comentario) {
-        *comentario = '\0';
-    }
+    if (comentario) *comentario = '\0';
+
+    // Se a linha estiver vazia após tirar o comentário, vaza
+    if (strlen(linha) <= 1) return;
 
     char linha_original[500];
     strcpy(linha_original, linha);
 
     char *comando = strtok(linha, " \n\r");
-    while (comando != NULL)
-    {
+    
+    while (comando != NULL) {
         if (strcmp(comando, "REPETE") == 0) {
             char *vezes_str = strtok(NULL, " \n\r");
             int vezes = (vezes_str) ? atoi(vezes_str) : 0;
@@ -182,42 +183,49 @@ void interpretar_linha(char *linha, unsigned char **ptr_ref, unsigned char *tape
             if (inicio && fim && fim > inicio) {
                 *fim = '\0';
                 char *bloco = inicio + 1;
-                for (int i = 0; i < vezes; i++)
-                {
+                
+                for (int i = 0; i < vezes; i++) {
                     char copia_bloco[256];
                     strcpy(copia_bloco, bloco);
-                    char *sub = strtok(copia_bloco, " \n\r");
-                    while (sub != NULL)
-                    {
-                        executar(sub, ptr_ref, tapebase, agenda, total);
-                        sub = strtok(NULL, " \n\r");
-                    }
                     
+                    // USANDO STRTOK_R (Versão segura para loops internos)
+                    // Se seu compilador for muito antigo e não aceitar, 
+                    // a gente muda, mas no GCC moderno isso aqui é o padrão.
+                    char *saveptr;
+                    char *sub = strtok_r(copia_bloco, " \n\r", &saveptr);
+                    while (sub != NULL) {
+                        executar(sub, ptr_ref, tapebase, agenda, total);
+                        sub = strtok_r(NULL, " \n\r", &saveptr);
+                    }
                 }
+                // Pula o bloco processado para não ler de novo
                 int offset = (int)(fim - linha_original) + 1;
                 comando = strtok(linha + offset, " \n\r");
+                if (!comando) break;
                 continue;
-                }
             }
-            else if (strcmp(comando, "CARREGAR") == 0) {
-                char *nome_arquivo = strtok(NULL, " \n\r");
-                if (nome_arquivo) {
-                    FILE *arq = fopen(nome_arquivo, "r");
-                    if (arq) {
-                        char linha_arq[500];
-                        while (fgets(linha_arq, sizeof(linha_arq), arq)) {
-                            interpretar_linha(linha_arq, ptr_ref, tapebase, agenda, total);
-                        }
-                        fclose(arq);
-                    } else {
-                        printf("[ERRO] Arquivo %s nao encontrado.\n", nome_arquivo);
+        } 
+        else if (strcmp(comando, "CARREGAR") == 0) {
+            char *nome_arquivo = strtok(NULL, " \n\r");
+            if (nome_arquivo) {
+                FILE *arq = fopen(nome_arquivo, "r");
+                if (arq) {
+                    char linha_arq[500];
+                    while (fgets(linha_arq, sizeof(linha_arq), arq)) {
+                        interpretar_linha(linha_arq, ptr_ref, tapebase, agenda, total);
                     }
+                    fclose(arq);
                 }
             }
-            else {
-                executar(comando, ptr_ref, tapebase, agenda, total);
-                if (strcmp(comando, "FALAR") == 0) return;
-    }
+            return; // Após carregar, para de ler a linha atual
+        }
+        else {
+            executar(comando, ptr_ref, tapebase, agenda, total);
+            // REGRA DE OURO: Se foi FALAR ou PULAR, a linha acabou!
+            if (strcmp(comando, "FALAR") == 0 || strcmp(comando, "PULAR") == 0 || strcmp(comando, "SE_IGUAL") == 0) {
+                return; 
             }
+        }
         comando = strtok(NULL, " \n\r");
     }
+}
