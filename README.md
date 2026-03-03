@@ -44,6 +44,7 @@ Siga os passos abaixo para compilar o interpretador e rodar seu primeiro código
 | **SE_IGUAL** | Verifica se valor é igual a algo. | `SE_IGUAL 10` |
 | **ROTULO** | Cria um rotulo que você pode voltar depois. | `ROTULO oi` |
 | **PULAR** | Pula para o rotulo que você criou. | `PULAR oi` |
+| **SAIR** | Para o programa | `SAIR` |
 
 
 atualmente eu não sei o poder total dessa linguagem, se você conseguir fazer algo legal, ou tiver sugestões por favor me contate!!
