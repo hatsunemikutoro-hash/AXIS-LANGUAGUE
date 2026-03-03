@@ -1,0 +1,14 @@
+$ 1. Pede a entrada
+FALAR "Digite o numero secreto: "
+ENTRADA
+
+$ 2. Lógica de decisão (Se for 10, pula direto pro win)
+SE_IGUAL 10 win
+
+$ 3. Se NÃO for 10, o código continua aqui embaixo (ERROU)
+FALAR "Voce Perdeu!"
+SAIR          $ <--- IMPORTANTE: Para o código não ler o "Venceu" embaixo
+
+$ 4. O destino de quem acertou
+ROTULO win
+FALAR "Voce Venceu!"

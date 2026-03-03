@@ -69,7 +69,10 @@ void executar(char *comando, unsigned char **ptr_ref, unsigned char *tapebase, V
     else if (strcmp(comando, "SOMA") == 0 || strcmp(comando, "SOMAR") == 0) {
         char *valor_texto = strtok(NULL, " \n\r");
         if (valor_texto) (**ptr_ref) += atoi(valor_texto);
-    } 
+    } else if (strcmp(comando, "SAIR") == 0) {
+        // Encerra o programa na hora
+        exit(0); 
+    }
     else if (strcmp(comando, "SUBTRAIR") == 0 || strcmp(comando, "SUBTRAI") == 0) {
         char *valor_texto = strtok(NULL, " \n\r");
         if (valor_texto) (**ptr_ref) -= atoi(valor_texto);
