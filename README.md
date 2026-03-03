@@ -10,10 +10,6 @@ A **AXIS** é uma linguagem de baixo nível criada para quem quer sentir o **pod
 
 Siga os passos abaixo para compilar o interpretador e rodar seu primeiro código:
 
-1. **Compilação** Abra o terminal e use o `gcc`:
-   ```bash
-   gcc main.c -o axis
-
 2. **Criando seu Script** Crie um arquivo .axis (ex: teste.axis):
   ## 💻 Exemplo de Código:
     $ Fazendo a AXIS brilhar
