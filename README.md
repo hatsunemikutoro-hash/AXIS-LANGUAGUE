@@ -25,11 +25,11 @@ Siga os passos abaixo para compilar o interpretador e rodar seu primeiro código
 
 3. **Executar** Abra o terminal e digite:
    ```bash
-   ./axis
+   gcc interpretador.c motor.c -o axis
    
 4. **Abrir o arquivo** digite:
    ```bash
-   CARREGAR nomeDoarquivo.axis
+   ./axis nome_do_arquivo.axis
 
 ## 📋 Comandos da AXIS
 
@@ -40,12 +40,14 @@ Siga os passos abaixo para compilar o interpretador e rodar seu primeiro código
 | **DIREITA** | Move o ponteiro para o próximo quadrado. | `DIREITA` |
 | **ESQUERDA** | Move o ponteiro para o quadrado anterior. | `ESQUERDA` |
 | **VALOR** | Imprime o número guardado no quadrado. | `VALOR` |
-| **FALAR** | Imprime o caractere (Tabela ASCII). | `FALAR` |
+| **FALAR** | Imprime a fala ou o caracter em ascii. | `FALAR "Oi"` |
 | **ENTRADA** | Abre o teclado para digitar um valor. | `ENTRADA` |
 | **NOMEAR** | Define um apelido para uma posição. | `NOMEAR 0 X` |
 | **IR** | Pula para uma posição ou variável. | `IR X` |
 | **REPETE** | Cria um loop que executa o bloco `[ ]`. | `REPETE 5 [ MAIS ]` |
-| **ZERAR** | Zera o valor do quadrado atual. | `ZERAR` |
+| **SE_IGUAL** | Verifica se valor é igual a algo. | `SE_IGUAL 10` |
+| **ROTULO** | Cria um rotulo que você pode voltar depois. | `ROTULO oi` |
+| **PULAR** | Pula para o rotulo que você criou. | `PULAR oi` |
 
 
 atualmente eu não sei o poder total dessa linguagem, se você conseguir fazer algo legal, ou tiver sugestões por favor me contate!!

@@ -18,7 +18,6 @@ void mapear_rotulo(FILE *arquivo) {
             strcpy(mapa_de_rotulos[total_rotulos].nome, nome_rotulo);
             mapa_de_rotulos[total_rotulos].posicao = posicao;
 
-            printf("LOG: Rotulo '%s' mapeado na posicao %ld\n", nome_rotulo, posicao);
             total_rotulos++;
         }
     }
@@ -50,6 +49,20 @@ void executar(char *comando, unsigned char **ptr_ref, unsigned char *tapebase, V
             long endereco = buscar_linha_do_rotulo(nome_alvo);
             if (endereco != -1) {
                 fseek(arquivo_global, endereco, SEEK_SET);
+            }
+        }
+    } else if (strcmp(comando, "SE_IGUAL") == 0)
+    {
+        char *valor_str = strtok(NULL, " \n\r");
+        char *alvo = strtok(NULL, " \n\r");
+
+        if (valor_str && alvo) {
+            int valor_comparar = atoi(valor_str);
+            if (**ptr_ref == (unsigned char)valor_comparar) {
+                long endereco = buscar_linha_do_rotulo(alvo);
+                if (endereco != -1) {
+                    fseek(arquivo_global, endereco, SEEK_SET);
+                }
             }
         }
     }
@@ -91,7 +104,6 @@ void executar(char *comando, unsigned char **ptr_ref, unsigned char *tapebase, V
         
         if (scanf(" %d", &temp) == 1) {
             **ptr_ref = (unsigned char)(temp & 0xFF);
-            printf(" Valor %d armazenado. \n", **ptr_ref);
         } else {
             printf(" Entrada invalida.\n");
         }
@@ -119,12 +131,31 @@ void executar(char *comando, unsigned char **ptr_ref, unsigned char *tapebase, V
             agenda[*total].endereco = atoi(pos_str);
             strcpy(agenda[*total].nome, nome_str);
             (*total)++; // Incrementa o contador oficial
-            printf("[AXIS] %s agora e o quadrado %s\n", nome_str, pos_str);
         }
     }
     else if (strcmp(comando, "FALAR") == 0) {
-        putchar(**ptr_ref); // Imprime o caractere (VALOR)
-        fflush(stdout);
+        char *argumento = strtok(NULL, "");
+
+        if (argumento != NULL) {
+            while (*argumento == ' ') argumento++;
+            
+            if (argumento[0] == '"') {
+                char *fim = strrchr(argumento, '"');
+                if (fim > argumento) {
+                    for (char *p = argumento + 1; p < fim; p++) {
+                        printf("%c", *p);
+                    }
+                    printf("\n");
+                    fflush(stdout);
+                }
+            } else {
+                printf("%c", **ptr_ref);
+                fflush(stdout);
+            }
+        } else {
+            printf("%c", **ptr_ref);
+            fflush(stdout);
+        }
     }
 }
 
@@ -185,7 +216,8 @@ void interpretar_linha(char *linha, unsigned char **ptr_ref, unsigned char *tape
             }
             else {
                 executar(comando, ptr_ref, tapebase, agenda, total);
+                if (strcmp(comando, "FALAR") == 0) return;
+    }
             }
-            comando = strtok(NULL, " \n\r");
-        }
+        comando = strtok(NULL, " \n\r");
     }
