@@ -27,24 +27,8 @@ Siga os passos abaixo para compilar o interpretador e rodar seu primeiro código
    ```bash
    ./axis nome_do_arquivo.axis
 
-## 📋 Comandos da AXIS
+PARA ACESSAR OS COMANDOS ACESSE A DOCUMENTAÇÃO OFICIAL.
 
-| Comando | O que ele faz na Memória? | Exemplo |
-| :--- | :--- | :--- |
-| **MAIS** | Soma +1 ao valor do quadrado atual. | `MAIS` |
-| **MENOS** | Subtrai -1 do valor do quadrado atual. | `MENOS` |
-| **DIREITA** | Move o ponteiro para o próximo quadrado. | `DIREITA` |
-| **ESQUERDA** | Move o ponteiro para o quadrado anterior. | `ESQUERDA` |
-| **VALOR** | Imprime o número guardado no quadrado. | `VALOR` |
-| **FALAR** | Imprime a fala ou o caracter em ascii. | `FALAR "Oi"` |
-| **ENTRADA** | Abre o teclado para digitar um valor. | `ENTRADA` |
-| **NOMEAR** | Define um apelido para uma posição. | `NOMEAR 0 X` |
-| **IR** | Pula para uma posição ou variável. | `IR X` |
-| **REPETE** | Cria um loop que executa o bloco `[ ]`. | `REPETE 5 [ MAIS ]` |
-| **SE_IGUAL** | Verifica se valor é igual a algo. | `SE_IGUAL 10` |
-| **ROTULO** | Cria um rotulo que você pode voltar depois. | `ROTULO oi` |
-| **PULAR** | Pula para o rotulo que você criou. | `PULAR oi` |
-| **SAIR** | Para o programa | `SAIR` |
-
+https://hatsunemikutoro-hash.github.io/AXIS-DOCUMENTATION/
 
 atualmente eu não sei o poder total dessa linguagem, se você conseguir fazer algo legal, ou tiver sugestões por favor me contate!!
