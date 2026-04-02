@@ -3,26 +3,43 @@
 
 #include <stdio.h>
 
-// --- Suas Definições de Dados ---
-typedef struct {
-    char nome[20];
-    int endereco;
-} Variavel;
+// ─── Constantes ───────────────────────────────────────────────────────────────
+#define TAPE_SIZE       30000
+#define MAX_ROTULOS     512
+#define MAX_VARIAVEIS   512
+#define MAX_NOME        64
+#define MAX_LINHA       512
 
+// ─── Estruturas ───────────────────────────────────────────────────────────────
 typedef struct {
-    char nome[50];
+    char nome[MAX_NOME];
     long posicao;
 } Rotulo;
 
-// --- Variáveis Globais (Avisando que elas existem) ---
-extern FILE *arquivo_global;
-extern Rotulo mapa_de_rotulos[100];
-extern int total_rotulos;
+typedef struct {
+    char nome[MAX_NOME];
+    int  endereco;
+} Variavel;
 
-// --- Assinaturas das Funções ---
-void mapear_rotulo(FILE *arquivo);
-long buscar_linha_do_rotulo(char *nome);
-void executar(char *comando, unsigned char **ptr_ref, unsigned char *tapebase, Variavel *agenda, int *total);
-void interpretar_linha(char *linha, unsigned char **ptr_ref, unsigned char *tapebase, Variavel *agenda, int *total);
+// ─── Estado global do interpretador ──────────────────────────────────────────
+typedef struct {
+    unsigned char  fita[TAPE_SIZE];
+    unsigned char *ptr;             // Ponteiro atual na fita
 
-#endif
+    Rotulo    rotulos[MAX_ROTULOS];
+    int       total_rotulos;
+
+    Variavel  variaveis[MAX_VARIAVEIS];
+    int       total_variaveis;
+
+    FILE     *arquivo;
+    int       verbose;              // Modo debug (-v)
+} EstadoAxis;
+
+// ─── API pública ──────────────────────────────────────────────────────────────
+void axis_init(EstadoAxis *e);
+void axis_mapear_rotulos(EstadoAxis *e);
+int  axis_executar_arquivo(EstadoAxis *e, const char *caminho);
+void axis_interpretar_linha(EstadoAxis *e, char *linha);
+
+#endif // AXIS_H
