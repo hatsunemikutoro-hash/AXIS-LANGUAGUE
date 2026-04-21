@@ -144,13 +144,38 @@ static void cmd_esquerda(Ctx *ctx) {
 }
 
 static void cmd_soma(Ctx *ctx) {
-    char *val = proximo_token(ctx);
-    if (val) *ctx->e->ptr += (unsigned char)atoi(val);
+    char *val_str = proximo_token(ctx);
+    if (!val_str) return;
+
+    // 1. Tenta ver se é uma variável
+    int endereco = buscar_variavel(ctx->e, val_str);
+    unsigned char valor_para_somar;
+
+    if (endereco != -1) {
+        // Se achou a variável, pega o valor que está na fita naquele endereço
+        valor_para_somar = ctx->e->fita[endereco];
+    } else {
+        // Se não achou, trata como número direto (literal)
+        valor_para_somar = (unsigned char)atoi(val_str);
+    }
+
+    *ctx->e->ptr += valor_para_somar;
 }
 
 static void cmd_subtrair(Ctx *ctx) {
-    char *val = proximo_token(ctx);
-    if (val) *ctx->e->ptr -= (unsigned char)atoi(val);
+    char *val_str = proximo_token(ctx);
+    if (!val_str) return;
+
+    int endereco = buscar_variavel(ctx->e, val_str);
+    unsigned char valor_para_sub;
+
+    if (endereco != -1) {
+        valor_para_sub = ctx->e->fita[endereco];
+    } else {
+        valor_para_sub = (unsigned char)atoi(val_str);
+    }
+
+    *ctx->e->ptr -= valor_para_sub;
 }
 
 static void cmd_ir(Ctx *ctx) {

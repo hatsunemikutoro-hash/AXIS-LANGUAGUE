@@ -11,17 +11,13 @@
       "id": "axis",
       "aliases": ["AXIS", "axis"],
       "extensions": [".axis"],
-      "configuration": "./language-configuration.json"
+      "configuration": "./language-configuration.json",
+      "icon": { "light": "./logo.png", "dark": "./logo.png" }
     }],
     "grammars": [{
       "language": "axis",
       "scopeName": "source.axis",
       "path": "./syntaxes/axis.tmLanguage.json"
-    }],
-    "iconThemes": [{
-      "id": "axis-icons",
-      "label": "AXIS File Icons",
-      "path": "./axis-icons.json"
     }]
   }
 }

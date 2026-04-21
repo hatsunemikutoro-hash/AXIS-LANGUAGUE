@@ -6,24 +6,35 @@
       "match": "\\$.*$"
     },
     {
+      "name": "string.quoted.double.axis",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.axis",
+          "match": "\\\\."
+        }
+      ]
+    },
+    {
       "name": "keyword.control.axis",
-      "match": "\\b(REPETE|CARREGAR|SAIR|ENTRADA)\\b"
+      "match": "\\b(REPETE|CARREGAR|SAIR|ENTRADA|SE|SENAO|FIM)\\b"
     },
     {
       "name": "keyword.operator.axis",
-      "match": "\\b(MAIS|MENOS|SOMA|ZERAR|DIREITA|ESQUERDA|IR)\\b"
+      "match": "\\b(MAIS|MENOS|SOMA|ZERAR|DIREITA|ESQUERDA|IR|IGUAL|DIFERENTE)\\b"
     },
     {
       "name": "support.function.axis",
-      "match": "\\b(FALAR|VALOR|NOMEAR)\\b"
+      "match": "\\b(FALAR|VALOR|NOMEAR|LIMPAR|COR)\\b"
     },
     {
       "name": "constant.numeric.axis",
       "match": "\\b[0-9]+\\b"
     },
     {
-      "name": "constant.numeric.axis",
-      "match": "\\b[0-9]+\\b"
+      "name": "variable.name.axis",
+      "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
     }
   ]
 }
