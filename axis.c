@@ -42,6 +42,10 @@ static void dbg(EstadoAxis *e, const char *cmd) {
     fflush(stdout);
 }
 
+// Resolve um token como *endereço* (posição na fita):
+// se for nome de variável, retorna o endereço cadastrado;
+// caso contrário, interpreta como literal numérico.
+
 // Busca um rótulo e retorna sua posição no arquivo, ou -1 se não encontrado
 static long buscar_rotulo(EstadoAxis *e, const char *nome) {
     for (int i = 0; i < e->total_rotulos; i++) {
@@ -67,6 +71,24 @@ static void pular_para_rotulo(EstadoAxis *e, const char *nome) {
     if (pos != -1 && e->arquivo)
         fseek(e->arquivo, pos, SEEK_SET);
 }
+
+// Resolve um token: se for nome de variável, retorna o valor na fita;
+// caso contrário, interpreta como literal numérico.
+static unsigned char resolver_valor(EstadoAxis *e, const char *token) {
+    int endereco = buscar_variavel(e, token);
+    if (endereco != -1)
+        return e->fita[endereco];
+    return (unsigned char)atoi(token);
+}
+
+
+static int resolver_endereco(EstadoAxis *e, const char *token) {
+    int endereco = buscar_variavel(e, token);
+    if (endereco != -1)
+        return endereco;
+    return atoi(token);
+}
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Implementação de cada comando
@@ -225,31 +247,28 @@ static void cmd_se_igual(Ctx *ctx) {
     char *alvo    = proximo_token(ctx);
     if (!val_str || !alvo) return;
 
-    if (*ctx->e->ptr == (unsigned char)atoi(val_str))
+    if (*ctx->e->ptr == resolver_valor(ctx->e, val_str))
         pular_para_rotulo(ctx->e, alvo);
 }
 
-// NOVO: Pula para o rótulo se o valor atual for MENOR que o argumento
 static void cmd_se_menor(Ctx *ctx) {
     char *val_str = proximo_token(ctx);
     char *alvo    = proximo_token(ctx);
     if (!val_str || !alvo) return;
 
-    if (*ctx->e->ptr < (unsigned char)atoi(val_str))
+    if (*ctx->e->ptr < resolver_valor(ctx->e, val_str))
         pular_para_rotulo(ctx->e, alvo);
 }
 
-// NOVO: Pula para o rótulo se o valor atual for MAIOR que o argumento
 static void cmd_se_maior(Ctx *ctx) {
     char *val_str = proximo_token(ctx);
     char *alvo    = proximo_token(ctx);
     if (!val_str || !alvo) return;
 
-    if (*ctx->e->ptr > (unsigned char)atoi(val_str))
+    if (*ctx->e->ptr > resolver_valor(ctx->e, val_str))
         pular_para_rotulo(ctx->e, alvo);
 }
 
-// NOVO: Copia o valor da posição <origem> para a posição <destino>
 static void cmd_copiar(Ctx *ctx) {
     EstadoAxis *e = ctx->e;
     char *orig_str = proximo_token(ctx);
@@ -259,8 +278,8 @@ static void cmd_copiar(Ctx *ctx) {
         return;
     }
 
-    int orig = atoi(orig_str);
-    int dest = atoi(dest_str);
+    int orig = resolver_endereco(e, orig_str);
+    int dest = resolver_endereco(e, dest_str);
 
     if (orig < 0 || orig >= TAPE_SIZE || dest < 0 || dest >= TAPE_SIZE) {
         fprintf(stderr, "ERRO AXIS: Posicao fora dos limites em COPIAR\n");
