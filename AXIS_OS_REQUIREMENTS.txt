@@ -1,0 +1,207 @@
+AXIS LANGUAGE - REQUIREMENTS FOR OS DEVELOPMENT CAPABILITY
+===========================================================
+
+CURRENT STATE ANALYSIS:
+----------------------
+AXIS is currently a Brainfuck-inspired interpreted language with:
+- 30,000-byte tape (memory space)
+- Named variables (aliases for tape positions)
+- Labels and jump instructions (PULAR, SE_IGUAL, etc.)
+- Basic arithmetic (MAIS, MENOS, SOMA, SUBTRAIR)
+- I/O (ENTRADA, VALOR, FALAR)
+- Loop construct (REPETE)
+- Function-like capability (FUNCAO/CHAMAR from examples)
+- Simple scripting language running on top of a host OS
+
+TO BE CAPABLE OF WRITING AN OS, AXIS NEEDS:
+============================================
+
+PRIORITY 1: ESSENTIAL LOW-LEVEL ACCESS
+--------------------------------------
+1. **Expanded Memory Addressing**
+   - Increase tape size to cover full addressable space (minimum 64KB for real mode, preferably 4GB for protected mode)
+   - Add ability to specify memory segments (for x86: CS, DS, ES, SS)
+
+2. **Direct Memory Access**
+   - PEEK <address> - read byte from arbitrary memory address
+   - POKE <address> <value> - write byte to arbitrary memory address
+   - PEEKW <address> - read word (16-bit)
+   - PEEKDW <address> - read dword (32-bit)
+   - Equivalent POKEW/POKEDW
+
+3. **I/O Port Access**
+   - IN <port> - read byte from I/O port
+   - OUT <port> <value> - write byte to I/O port
+   - INW/OUTW, IND/OUTD for 16/32-bit variants
+
+4. **Memory-Mapped I/O**
+   - Ability to access hardware registers through memory addresses
+   - Example: POKE 0xB8000, 'A' to write to VGA memory
+
+PRIORITY 2: CPU CONTROL AND PRIVILEGED INSTRUCTIONS
+--------------------------------------------------
+1. **Interrupt Control**
+   - CLI - Clear Interrupt Flag (disable interrupts)
+   - STI - Set Interrupt Flag (enable interrupts)
+   - PUSHF/POPF - Push/Pop Flags register
+
+2. **CPU State Control**
+   - HLT - Halt CPU
+   - NOP - No Operation
+   - LIDT/LGDT/LTR - Load IDT/GDT/TR
+   - MOV to/from control registers (CR0, CR2, CR3, CR4)
+   - MOV to/from debug registers (DR0-DR7)
+
+3. **Memory Management**
+   - INVLPG - Invalidate TLB entry
+   - CLTS - Clear Task Switched flag
+   - Ability to manipulate page tables
+
+PRIORITY 3: DATA STRUCTURES AND EXTENDED TYPES
+---------------------------------------------
+1. **Extended Data Types**
+   - Support for 16-bit integers (WORD)
+   - Support for 32-bit integers (DWORD)
+   - Support for 64-bit integers (QWORD) if targeting x86_64
+   - Ability to specify data size in operations
+
+2. **Pointers and Address Arithmetic**
+   - & operator - address of (for labels/variables)
+   - * operator - dereference (pointer)
+   - Pointer arithmetic (add/subtract integers to pointers)
+   - Ability to store pointers in variables
+
+3. **Complex Data Structures**
+   - STRUCT/ENDSTRUCT - define structures
+   - UNION/ENDUNION - define unions
+   - Ability to define arrays
+   - TYPEDEF - create type aliases
+
+PRIORITY 4: STACK AND CONTEXT MANAGEMENT
+---------------------------------------
+1. **Enhanced Stack Operations**
+   - Explicit stack manipulation (PUSH, POP)
+   - Ability to save/restore registers
+   - Multiple stack support (one per task/process)
+
+2. **Context Switching Primitives**
+   - SAVECTX <label> - save CPU context to memory
+   - LOADCTX <label> - load CPU context from memory
+   - Ability to switch stacks
+
+PRIORITY 5: CONTROL FLOW ENHANCEMENTS
+------------------------------------
+1. **Advanced Jump Instructions**
+   - Direct jumps to memory addresses (not just labels)
+   - Conditional jumps based on flags (JA, JB, JE, etc.)
+   - Software interrupts (INT <num>)
+
+2. **Exception Handling**
+   - TRY/CATCH/FINALLY constructs
+   - Ability to define exception handlers
+   - Stack unwinding mechanism
+
+PRIORITY 6: MODULE SYSTEM AND LINKING
+------------------------------------
+1. **Separate Compilation**
+   - Ability to compile modules separately
+   - PUBLIC/EXPORT - make symbols available to other modules
+   - PRIVATE/STATIC - module-local symbols
+   - IMPORT/INCLUDE - import symbols from other modules
+
+2. **Relocation and Fixups**
+   - Support for position-independent code
+   - Relocation table generation
+   - Linker script support
+
+PRIORITY 7: COMPILATION TARGETS
+------------------------------
+1. **Bootable Code Generation**
+   - Option to generate raw binary (for boot sector)
+   - Option to generate ELF/PE executables
+   - Ability to specify entry point
+   - Ability to generate multipart boot images
+
+2. **Runtime Elimination**
+   - Option to compile to bare metal (no runtime dependency)
+   - Minimal freestanding mode
+   - Ability to link with custom crt0
+
+PRIORITY 8: STANDARD LIBRARY FOR OS DEV
+--------------------------------------
+1. **Memory Management**
+   - malloc/free implementations
+   - heap initialization
+   - kmalloc/kfree for kernel
+
+2. **String Handling**
+   - strlen, strcpy, strcmp, etc.
+   - ASCII/Unicode support
+
+3. **Hardware Abstraction**
+   - Basic drivers in library form
+   - Standard interfaces for timer, keyboard, display
+
+PRIORITY 9: DEBUGGING AND VERIFICATION
+-------------------------------------
+1. **Hardware-Assisted Debugging**
+   - Single-step execution (TF flag)
+   - Breakpoint support (INT3)
+   - Register/memory dump commands
+   - Watchpoints
+
+2. **Safety Features**
+   - Bounds checking (optional)
+   - Null pointer detection
+   - Stack overflow detection
+
+APPROACH OPTIONS:
+================
+
+OPTION 1: NATIVE COMPILER
+------------------------
+Modify AXIS to be a compiled language that generates:
+- Machine code (x86, ARM, etc.)
+- Directly bootable binaries
+- No dependency on host OS interpreter
+
+OPTION 2: HOSTED KERNEL + AXIS AS DSL
+-------------------------------------
+- Create a minimal kernel in C/Assembly
+- Kernel provides hardware access primitives to AXIS
+- AXIS runs as a privileged scripting language within kernel
+- Kernel handles: memory management, scheduling, hardware
+- AXIS handles: application logic, device drivers (with kernel assistance)
+
+OPTION 3: HYBRID APPROACH
+-------------------------
+- Compile AXIS to object files
+- Link with a small kernel/runtime
+- Produce bootable image
+
+RECOMMENDED PATH:
+===============
+Given the current interpreter-based implementation, Option 2 is most feasible in the short term:
+1. Create a minimal kernel (in C/Assembly) that:
+   - Sets up protected mode/paging
+   - Manages memory and tasks
+   - Handles interrupts
+   - Provides hardware abstraction
+2. Extend AXIS interpreter to:
+   - Run in kernel space
+   - Access kernel-provided hardware primitives
+   - Call kernel services via syscalls
+3. Develop standard library in AXIS that wraps kernel services
+
+IMMEDIATE NEXT STEPS:
+===================
+1. Define hardware abstraction layer interface (what kernel must provide to AXIS)
+2. Extend AXIS syntax for low-level operations (PEEK/POKE, IN/OUT, etc.)
+3. Create a simple kernel that can:
+   - Boot and enter protected mode
+   - Initialize basic hardware (PIC, timer)
+   - Provide memory access services
+4. Port AXIS interpreter to run in kernel environment
+5. Develop basic drivers in AXIS using the new capabilities
+
+This approach allows incremental development while maintaining the spirit of AXIS as a powerful, low-level language.

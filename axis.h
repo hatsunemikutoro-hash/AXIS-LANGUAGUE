@@ -3,70 +3,83 @@
 
 #include <stdio.h>
 
-// ─── Constantes ───────────────────────────────────────────────────────────────
-#define TAPE_SIZE       30000
-#define MAX_ROTULOS     512
-#define MAX_VARIAVEIS   512
-#define MAX_FUNCOES     128
-#define MAX_PARAMS      16
-#define MAX_CALL_STACK  64
-#define MAX_NOME        64
-#define MAX_LINHA       512
+// =============================================================================
+//  Constants
+// =============================================================================
 
-// ─── Estruturas ───────────────────────────────────────────────────────────────
-typedef struct {
-    char nome[MAX_NOME];
-    long posicao;           // offset no arquivo logo após a linha FUNCAO
-} Rotulo;
+#define TAPE_SIZE      30000
+#define MAX_LABELS     512
+#define MAX_VARS       512
+#define MAX_FUNCS      128
+#define MAX_PARAMS     16
+#define MAX_CALL_STACK 64
+#define MAX_NAME       64
+#define MAX_LINE       512
 
-typedef struct {
-    char nome[MAX_NOME];
-    int  endereco;
-} Variavel;
+// =============================================================================
+//  Structures
+// =============================================================================
 
 typedef struct {
-    char nome[MAX_NOME];
-    char params[MAX_PARAMS][MAX_NOME]; // nomes dos parâmetros
+    char name[MAX_NAME];
+    long position;      // file offset immediately after the MARK line
+} Label;
+
+typedef struct {
+    char name[MAX_NAME];
+    int  address;
+} Variable;
+
+typedef struct {
+    char name[MAX_NAME];
+    char params[MAX_PARAMS][MAX_NAME]; // parameter names
     int  total_params;
-    long posicao;           // offset no arquivo logo após a linha FUNCAO
-} Funcao;
+    long position;      // file offset immediately after the DEF line
+} Function;
 
-// ─── Estado global do interpretador ──────────────────────────────────────────
+// =============================================================================
+//  Interpreter State
+// =============================================================================
+
 typedef struct {
-    unsigned char  fita[TAPE_SIZE];
-    unsigned char *ptr;             // Ponteiro atual na fita
+    unsigned char  tape[TAPE_SIZE];
+    unsigned char *ptr;             // current tape pointer
 
-    Rotulo    rotulos[MAX_ROTULOS];
-    int       total_rotulos;
+    Label    labels[MAX_LABELS];
+    int      total_labels;
 
-    Variavel  variaveis[MAX_VARIAVEIS];
-    int       total_variaveis;
+    Variable vars[MAX_VARS];
+    int      total_vars;
 
-    Funcao    funcoes[MAX_FUNCOES];
-    int       total_funcoes;
+    Function funcs[MAX_FUNCS];
+    int      total_funcs;
 
-    // Pilha de retorno: guarda a posição no arquivo para cada CHAMAR
-    long      call_stack[MAX_CALL_STACK];
-    // Guarda quantas variáveis existiam ao entrar em cada nível,
-    // para poder desfazê-las ao retornar
-    int       vars_ao_entrar[MAX_CALL_STACK];
-    // Guarda a posição do ptr da fita ao entrar (para restaurar se necessário)
-    unsigned char *ptr_ao_entrar[MAX_CALL_STACK];
-    int       call_depth;           // profundidade atual da pilha
+    // Return stack: stores the file position for each active CALL
+    long           call_stack[MAX_CALL_STACK];
+    // Number of variables that existed when each call frame was entered,
+    // so they can be unwound on RETURN
+    int            vars_on_enter[MAX_CALL_STACK];
+    // Tape pointer at the time of each call (restored on RETURN)
+    unsigned char *ptr_on_enter[MAX_CALL_STACK];
+    int            call_depth;      // current call stack depth
 
-    // Próxima célula livre para alocação temporária de parâmetros
-    // Começa no final da fita e cresce para trás, longe do espaço do usuário
-    int       prox_temp;
+    // Next free cell for temporary parameter allocation.
+    // Starts at the end of the tape and grows backward,
+    // away from the user-accessible region.
+    int   next_temp;
 
-    FILE     *arquivo;
-    int       verbose;              // Modo debug (-v)
-} EstadoAxis;
+    FILE *file;
+    int   verbose;                  // debug mode (-v flag)
+} AxisState;
 
-// ─── API pública ──────────────────────────────────────────────────────────────
-void axis_init(EstadoAxis *e);
-void axis_mapear_rotulos(EstadoAxis *e);
-void axis_mapear_funcoes(EstadoAxis *e);
-int  axis_executar_arquivo(EstadoAxis *e, const char *caminho);
-void axis_interpretar_linha(EstadoAxis *e, char *linha);
+// =============================================================================
+//  Public API
+// =============================================================================
+
+void axis_init(AxisState *s);
+void axis_scan_labels(AxisState *s);
+void axis_scan_functions(AxisState *s);
+int  axis_run_file(AxisState *s, const char *path);
+void axis_interpret_line(AxisState *s, char *line);
 
 #endif // AXIS_H

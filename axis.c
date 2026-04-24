@@ -5,639 +5,687 @@
 #include <string.h>
 #include <ctype.h>
 
-// ═════════════════════════════════════════════════════════════════════════════
-//  Tipos internos
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+//  Internal Types
+// =============================================================================
 
 typedef struct {
-    EstadoAxis *e;
-    char      **saveptr;
+    AxisState *state;
+    char     **saveptr;
 } Ctx;
 
-typedef void (*FnComando)(Ctx *ctx);
+typedef void (*CommandFn)(Ctx *ctx);
 
 typedef struct {
-    const char *nome;
-    FnComando   fn;
-} EntradaComando;
+    const char *name;
+    CommandFn   fn;
+} CommandEntry;
 
-// ═════════════════════════════════════════════════════════════════════════════
-//  Utilitários internos
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+//  Internal Utilities
+// =============================================================================
 
-static inline char *proximo_token(Ctx *ctx) {
+static inline char *next_token(Ctx *ctx) {
     return strtok_r(NULL, " \t\n\r", ctx->saveptr);
 }
 
-static void dbg(EstadoAxis *e, const char *cmd) {
-    if (!e->verbose) return;
-    printf("[DBG] CMD: %-12s | PTR=%04d | VALOR=%03d | PROFUNDIDADE=%d\n",
+static void debug_print(AxisState *s, const char *cmd) {
+    if (!s->verbose) return;
+    printf("[DBG] CMD: %-12s | PTR=%04d | VAL=%03d | DEPTH=%d\n",
            cmd,
-           (int)(e->ptr - e->fita),
-           (int)*(e->ptr),
-           e->call_depth);
+           (int)(s->ptr - s->tape),
+           (int)*(s->ptr),
+           s->call_depth);
     fflush(stdout);
 }
 
-// ─── Buscas ──────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+//  Lookup Helpers
+// -----------------------------------------------------------------------------
 
-static long buscar_rotulo(EstadoAxis *e, const char *nome) {
-    for (int i = 0; i < e->total_rotulos; i++) {
-        if (strcmp(e->rotulos[i].nome, nome) == 0)
-            return e->rotulos[i].posicao;
+static long find_label(AxisState *s, const char *name) {
+    for (int i = 0; i < s->total_labels; i++) {
+        if (strcmp(s->labels[i].name, name) == 0)
+            return s->labels[i].position;
     }
-    fprintf(stderr, "ERRO AXIS: Rotulo '%s' nao encontrado!\n", nome);
+    fprintf(stderr, "AXIS ERROR: Label '%s' not found!\n", name);
     return -1;
 }
 
-static int buscar_variavel(EstadoAxis *e, const char *nome) {
-    for (int i = e->total_variaveis - 1; i >= 0; i--) {
-        if (strcmp(e->variaveis[i].nome, nome) == 0)
-            return e->variaveis[i].endereco;
+static int find_variable(AxisState *s, const char *name) {
+    for (int i = s->total_vars - 1; i >= 0; i--) {
+        if (strcmp(s->vars[i].name, name) == 0)
+            return s->vars[i].address;
     }
     return -1;
 }
 
-static Funcao *buscar_funcao(EstadoAxis *e, const char *nome) {
-    for (int i = 0; i < e->total_funcoes; i++) {
-        if (strcmp(e->funcoes[i].nome, nome) == 0)
-            return &e->funcoes[i];
+static Function *find_function(AxisState *s, const char *name) {
+    for (int i = 0; i < s->total_funcs; i++) {
+        if (strcmp(s->funcs[i].name, name) == 0)
+            return &s->funcs[i];
     }
     return NULL;
 }
 
-static void pular_para_rotulo(EstadoAxis *e, const char *nome) {
-    long pos = buscar_rotulo(e, nome);
-    if (pos != -1 && e->arquivo)
-        fseek(e->arquivo, pos, SEEK_SET);
+static void jump_to_label(AxisState *s, const char *name) {
+    long pos = find_label(s, name);
+    if (pos != -1 && s->file)
+        fseek(s->file, pos, SEEK_SET);
 }
 
-static unsigned char resolver_valor(EstadoAxis *e, const char *token) {
-    int endereco = buscar_variavel(e, token);
-    if (endereco != -1)
-        return e->fita[endereco];
+static unsigned char resolve_value(AxisState *s, const char *token) {
+    int addr = find_variable(s, token);
+    if (addr != -1)
+        return s->tape[addr];
     return (unsigned char)atoi(token);
 }
 
-static int resolver_endereco(EstadoAxis *e, const char *token) {
-    int endereco = buscar_variavel(e, token);
-    if (endereco != -1)
-        return endereco;
+static int resolve_address(AxisState *s, const char *token) {
+    int addr = find_variable(s, token);
+    if (addr != -1)
+        return addr;
     return atoi(token);
 }
 
-static int alocar_temp(EstadoAxis *e) {
-    if (e->prox_temp < (TAPE_SIZE / 2)) {
-        fprintf(stderr, "ERRO AXIS: Memoria de parametros esgotada!\n");
+static int alloc_temp(AxisState *s) {
+    if (s->next_temp < (TAPE_SIZE / 2)) {
+        fprintf(stderr, "AXIS ERROR: Parameter memory exhausted!\n");
         return -1;
     }
-    return e->prox_temp--;
+    return s->next_temp--;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-//  Implementação de cada comando
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+//  Command Implementations
+// =============================================================================
 
-static void cmd_mais(Ctx *ctx)     { (*ctx->e->ptr)++; }
-static void cmd_menos(Ctx *ctx)    { (*ctx->e->ptr)--; }
-static void cmd_zerar(Ctx *ctx)    { *ctx->e->ptr = 0; }
-static void cmd_sair(Ctx *ctx)     { (void)ctx; exit(0); }
+// --- Arithmetic --------------------------------------------------------------
 
-static void cmd_valor(Ctx *ctx) {
-    printf("%d\n", (int)*ctx->e->ptr);
-    fflush(stdout);
+static void cmd_inc(Ctx *ctx)   { (*ctx->state->ptr)++; }
+static void cmd_dec(Ctx *ctx)   { (*ctx->state->ptr)--; }
+static void cmd_clear(Ctx *ctx) { *ctx->state->ptr = 0; }
+
+static void cmd_add(Ctx *ctx) {
+    char *arg = next_token(ctx);
+    if (!arg) return;
+    *ctx->state->ptr += resolve_value(ctx->state, arg);
 }
 
-static void cmd_falar(Ctx *ctx) {
-    char *arg = strtok_r(NULL, "", ctx->saveptr);
-    if (arg) {
-        while (*arg == ' ' || *arg == '\t') arg++;
-        if (arg[0] == '"') {
-            char *fim = strrchr(arg, '"');
-            if (fim > arg) {
-                for (char *p = arg + 1; p < fim; p++)
-                    putchar(*p);
-                putchar('\n');
-                fflush(stdout);
-            }
-        } else {
-            printf("%c", *ctx->e->ptr);
-            fflush(stdout);
-        }
-    } else {
-        printf("%c", *ctx->e->ptr);
-        fflush(stdout);
+static void cmd_sub(Ctx *ctx) {
+    char *arg = next_token(ctx);
+    if (!arg) return;
+    *ctx->state->ptr -= resolve_value(ctx->state, arg);
+}
+
+// --- Tape Navigation ---------------------------------------------------------
+
+static void cmd_next(Ctx *ctx) {
+    AxisState *s = ctx->state;
+    if (s->ptr < s->tape + TAPE_SIZE - 1) s->ptr++;
+    else fprintf(stderr, "AXIS WARNING: Right tape boundary reached!\n");
+}
+
+static void cmd_prev(Ctx *ctx) {
+    AxisState *s = ctx->state;
+    if (s->ptr > s->tape) s->ptr--;
+    else fprintf(stderr, "AXIS WARNING: Left tape boundary reached!\n");
+}
+
+static void cmd_seek(Ctx *ctx) {
+    AxisState *s = ctx->state;
+    char *target = next_token(ctx);
+    if (!target) return;
+    int pos = resolve_address(s, target);
+    if (pos >= 0 && pos < TAPE_SIZE)
+        s->ptr = &s->tape[pos];
+    else
+        fprintf(stderr, "AXIS ERROR: Invalid position in SEEK: %d\n", pos);
+}
+
+// --- Memory Operations -------------------------------------------------------
+
+static void cmd_copy(Ctx *ctx) {
+    AxisState *s = ctx->state;
+    char *from_str = next_token(ctx);
+    char *to_str   = next_token(ctx);
+    if (!from_str || !to_str) {
+        fprintf(stderr, "AXIS ERROR: COPY requires <from> <to>\n");
+        return;
     }
+    int from = resolve_address(s, from_str);
+    int to   = resolve_address(s, to_str);
+    if (from < 0 || from >= TAPE_SIZE || to < 0 || to >= TAPE_SIZE) {
+        fprintf(stderr, "AXIS ERROR: Position out of bounds in COPY\n");
+        return;
+    }
+    s->tape[to] = s->tape[from];
 }
 
-static void cmd_entrada(Ctx *ctx) {
+// --- Variable Management -----------------------------------------------------
+
+static void cmd_let(Ctx *ctx) {
+    AxisState *s   = ctx->state;
+    char *pos_str  = next_token(ctx);
+    char *name_str = next_token(ctx);
+    if (!pos_str || !name_str) {
+        fprintf(stderr, "AXIS ERROR: LET requires <position> <name>\n");
+        return;
+    }
+    if (s->total_vars >= MAX_VARS) {
+        fprintf(stderr, "AXIS ERROR: Variable limit reached!\n");
+        return;
+    }
+    s->vars[s->total_vars].address = atoi(pos_str);
+    strncpy(s->vars[s->total_vars].name, name_str, MAX_NAME - 1);
+    s->vars[s->total_vars].name[MAX_NAME - 1] = '\0';
+    s->total_vars++;
+}
+
+// --- Control Flow ------------------------------------------------------------
+
+static void cmd_mark(Ctx *ctx) {
+    next_token(ctx); // label name consumed during pre-scan; skip at runtime
+}
+
+static void cmd_jump(Ctx *ctx) {
+    char *target = next_token(ctx);
+    if (target) jump_to_label(ctx->state, target);
+}
+
+static void cmd_if_eq(Ctx *ctx) {
+    char *val_str = next_token(ctx);
+    char *target  = next_token(ctx);
+    if (!val_str || !target) return;
+    if (*ctx->state->ptr == resolve_value(ctx->state, val_str))
+        jump_to_label(ctx->state, target);
+}
+
+static void cmd_if_lt(Ctx *ctx) {
+    char *val_str = next_token(ctx);
+    char *target  = next_token(ctx);
+    if (!val_str || !target) return;
+    if (*ctx->state->ptr < resolve_value(ctx->state, val_str))
+        jump_to_label(ctx->state, target);
+}
+
+static void cmd_if_gt(Ctx *ctx) {
+    char *val_str = next_token(ctx);
+    char *target  = next_token(ctx);
+    if (!val_str || !target) return;
+    if (*ctx->state->ptr > resolve_value(ctx->state, val_str))
+        jump_to_label(ctx->state, target);
+}
+
+// --- Input / Output ----------------------------------------------------------
+
+static void cmd_read(Ctx *ctx) {
     int temp;
-    printf("Digite um numero (0-255): ");
+    printf("Enter a number (0-255): ");
     fflush(stdout);
     if (scanf("%d", &temp) == 1) {
-        *ctx->e->ptr = (unsigned char)(temp & 0xFF);
+        *ctx->state->ptr = (unsigned char)(temp & 0xFF);
     } else {
-        fprintf(stderr, "ERRO AXIS: Entrada invalida.\n");
+        fprintf(stderr, "AXIS ERROR: Invalid input.\n");
         int c; while ((c = getchar()) != '\n' && c != EOF);
     }
     int c; while ((c = getchar()) != '\n' && c != EOF);
 }
 
-static void cmd_direita(Ctx *ctx) {
-    EstadoAxis *e = ctx->e;
-    if (e->ptr < e->fita + TAPE_SIZE - 1) e->ptr++;
-    else fprintf(stderr, "AVISO AXIS: Limite direito da fita atingido!\n");
+static void cmd_print(Ctx *ctx) {
+    printf("%d\n", (int)*ctx->state->ptr);
+    fflush(stdout);
 }
 
-static void cmd_esquerda(Ctx *ctx) {
-    EstadoAxis *e = ctx->e;
-    if (e->ptr > e->fita) e->ptr--;
-    else fprintf(stderr, "AVISO AXIS: Limite esquerdo da fita atingido!\n");
-}
-
-static void cmd_soma(Ctx *ctx) {
-    char *val_str = proximo_token(ctx);
-    if (!val_str) return;
-    *ctx->e->ptr += resolver_valor(ctx->e, val_str);
-}
-
-static void cmd_subtrair(Ctx *ctx) {
-    char *val_str = proximo_token(ctx);
-    if (!val_str) return;
-    *ctx->e->ptr -= resolver_valor(ctx->e, val_str);
-}
-
-static void cmd_ir(Ctx *ctx) {
-    EstadoAxis *e = ctx->e;
-    char *alvo = proximo_token(ctx);
-    if (!alvo) return;
-    int pos = resolver_endereco(e, alvo);
-    if (pos >= 0 && pos < TAPE_SIZE)
-        e->ptr = &e->fita[pos];
-    else
-        fprintf(stderr, "ERRO AXIS: Posicao invalida em IR: %d\n", pos);
-}
-
-static void cmd_nomear(Ctx *ctx) {
-    EstadoAxis *e = ctx->e;
-    char *pos_str  = proximo_token(ctx);
-    char *nome_str = proximo_token(ctx);
-    if (!pos_str || !nome_str) {
-        fprintf(stderr, "ERRO AXIS: NOMEAR exige <posicao> <nome>\n");
-        return;
+static void cmd_say(Ctx *ctx) {
+    char *arg = strtok_r(NULL, "", ctx->saveptr);
+    if (arg) {
+        while (*arg == ' ' || *arg == '\t') arg++;
+        if (arg[0] == '"') {
+            char *end = strrchr(arg, '"');
+            if (end > arg) {
+                for (char *p = arg + 1; p < end; p++)
+                    putchar(*p);
+                putchar('\n');
+                fflush(stdout);
+                return;
+            }
+        }
     }
-    if (e->total_variaveis >= MAX_VARIAVEIS) {
-        fprintf(stderr, "ERRO AXIS: Limite de variaveis atingido!\n");
-        return;
-    }
-    e->variaveis[e->total_variaveis].endereco = atoi(pos_str);
-    strncpy(e->variaveis[e->total_variaveis].nome, nome_str, MAX_NOME - 1);
-    e->variaveis[e->total_variaveis].nome[MAX_NOME - 1] = '\0';
-    e->total_variaveis++;
+    printf("%c", *ctx->state->ptr);
+    fflush(stdout);
 }
 
-static void cmd_pular(Ctx *ctx) {
-    char *alvo = proximo_token(ctx);
-    if (alvo) pular_para_rotulo(ctx->e, alvo);
+// --- Functions ---------------------------------------------------------------
+
+static void cmd_def(Ctx *ctx) {
+    // Consumed at pre-scan time; skip all tokens at runtime
+    char *tok;
+    while ((tok = next_token(ctx)) != NULL) (void)tok;
 }
 
-static void cmd_se_igual(Ctx *ctx) {
-    char *val_str = proximo_token(ctx);
-    char *alvo    = proximo_token(ctx);
-    if (!val_str || !alvo) return;
-    if (*ctx->e->ptr == resolver_valor(ctx->e, val_str))
-        pular_para_rotulo(ctx->e, alvo);
+static void cmd_return(Ctx *ctx);  // forward declaration
+
+static void cmd_end(Ctx *ctx) {
+    if (ctx->state->call_depth > 0)
+        cmd_return(ctx);
 }
 
-static void cmd_se_menor(Ctx *ctx) {
-    char *val_str = proximo_token(ctx);
-    char *alvo    = proximo_token(ctx);
-    if (!val_str || !alvo) return;
-    if (*ctx->e->ptr < resolver_valor(ctx->e, val_str))
-        pular_para_rotulo(ctx->e, alvo);
-}
+static void cmd_call(Ctx *ctx) {
+    AxisState *s = ctx->state;
 
-static void cmd_se_maior(Ctx *ctx) {
-    char *val_str = proximo_token(ctx);
-    char *alvo    = proximo_token(ctx);
-    if (!val_str || !alvo) return;
-    if (*ctx->e->ptr > resolver_valor(ctx->e, val_str))
-        pular_para_rotulo(ctx->e, alvo);
-}
-
-static void cmd_copiar(Ctx *ctx) {
-    EstadoAxis *e = ctx->e;
-    char *orig_str = proximo_token(ctx);
-    char *dest_str = proximo_token(ctx);
-    if (!orig_str || !dest_str) {
-        fprintf(stderr, "ERRO AXIS: COPIAR exige <origem> <destino>\n");
-        return;
-    }
-    int orig = resolver_endereco(e, orig_str);
-    int dest = resolver_endereco(e, dest_str);
-    if (orig < 0 || orig >= TAPE_SIZE || dest < 0 || dest >= TAPE_SIZE) {
-        fprintf(stderr, "ERRO AXIS: Posicao fora dos limites em COPIAR\n");
-        return;
-    }
-    e->fita[dest] = e->fita[orig];
-}
-
-static void cmd_chamar(Ctx *ctx) {
-    EstadoAxis *e = ctx->e;
-
-    char *nome_func = proximo_token(ctx);
-    if (!nome_func) {
-        fprintf(stderr, "ERRO AXIS: CHAMAR exige o nome da funcao\n");
+    char *func_name = next_token(ctx);
+    if (!func_name) {
+        fprintf(stderr, "AXIS ERROR: CALL requires a function name\n");
         return;
     }
 
-    Funcao *fn = buscar_funcao(e, nome_func);
+    Function *fn = find_function(s, func_name);
     if (!fn) {
-        fprintf(stderr, "ERRO AXIS: Funcao '%s' nao encontrada!\n", nome_func);
+        fprintf(stderr, "AXIS ERROR: Function '%s' not found!\n", func_name);
         return;
     }
 
-    if (e->call_depth >= MAX_CALL_STACK) {
-        fprintf(stderr, "ERRO AXIS: Limite de recursao atingido!\n");
+    if (s->call_depth >= MAX_CALL_STACK) {
+        fprintf(stderr, "AXIS ERROR: Recursion limit reached!\n");
         return;
     }
 
-    unsigned char valores[MAX_PARAMS];
+    // Resolve all arguments before touching the call stack
+    unsigned char values[MAX_PARAMS];
     for (int i = 0; i < fn->total_params; i++) {
-        char *arg = proximo_token(ctx);
+        char *arg = next_token(ctx);
         if (!arg) {
-            fprintf(stderr, "ERRO AXIS: Funcao '%s' espera %d argumento(s), faltou argumento %d\n",
-                    nome_func, fn->total_params, i + 1);
+            fprintf(stderr, "AXIS ERROR: Function '%s' expects %d arg(s), missing arg %d\n",
+                    func_name, fn->total_params, i + 1);
             return;
         }
-        valores[i] = resolver_valor(e, arg);
+        values[i] = resolve_value(s, arg);
     }
 
-    e->call_stack[e->call_depth]     = ftell(e->arquivo);
-    e->vars_ao_entrar[e->call_depth] = e->total_variaveis;
-    e->ptr_ao_entrar[e->call_depth]  = e->ptr;
-    e->call_depth++;
+    // Save caller context
+    s->call_stack[s->call_depth]      = ftell(s->file);
+    s->vars_on_enter[s->call_depth]   = s->total_vars;
+    s->ptr_on_enter[s->call_depth]    = s->ptr;
+    s->call_depth++;
 
+    // Bind parameters as temporary variables
     for (int i = 0; i < fn->total_params; i++) {
-        int celula = alocar_temp(e);
-        if (celula == -1) { e->call_depth--; return; }
-        e->fita[celula] = valores[i];
-        if (e->total_variaveis < MAX_VARIAVEIS) {
-            e->variaveis[e->total_variaveis].endereco = celula;
-            strncpy(e->variaveis[e->total_variaveis].nome,
-                    fn->params[i], MAX_NOME - 1);
-            e->variaveis[e->total_variaveis].nome[MAX_NOME - 1] = '\0';
-            e->total_variaveis++;
+        int cell = alloc_temp(s);
+        if (cell == -1) { s->call_depth--; return; }
+        s->tape[cell] = values[i];
+        if (s->total_vars < MAX_VARS) {
+            s->vars[s->total_vars].address = cell;
+            strncpy(s->vars[s->total_vars].name, fn->params[i], MAX_NAME - 1);
+            s->vars[s->total_vars].name[MAX_NAME - 1] = '\0';
+            s->total_vars++;
         }
     }
 
-    if (e->arquivo)
-        fseek(e->arquivo, fn->posicao, SEEK_SET);
+    if (s->file)
+        fseek(s->file, fn->position, SEEK_SET);
 
-    if (e->verbose)
-        printf("[DBG] CHAMAR '%s' com %d arg(s) | profundidade=%d\n",
-               nome_func, fn->total_params, e->call_depth);
+    if (s->verbose)
+        printf("[DBG] CALL '%s' with %d arg(s) | depth=%d\n",
+               func_name, fn->total_params, s->call_depth);
 }
 
-static void cmd_retornar(Ctx *ctx) {
-    EstadoAxis *e = ctx->e;
+static void cmd_return(Ctx *ctx) {
+    AxisState *s = ctx->state;
 
-    if (e->call_depth <= 0) {
-        fprintf(stderr, "AVISO AXIS: RETORNAR fora de uma funcao, ignorado.\n");
+    if (s->call_depth <= 0) {
+        fprintf(stderr, "AXIS WARNING: RETURN outside a function, ignored.\n");
         return;
     }
 
-    e->call_depth--;
-    e->total_variaveis = e->vars_ao_entrar[e->call_depth];
-    e->ptr             = e->ptr_ao_entrar[e->call_depth];
+    s->call_depth--;
+    s->total_vars = s->vars_on_enter[s->call_depth];
+    s->ptr        = s->ptr_on_enter[s->call_depth];
 
-    if (e->arquivo)
-        fseek(e->arquivo, e->call_stack[e->call_depth], SEEK_SET);
+    if (s->file)
+        fseek(s->file, s->call_stack[s->call_depth], SEEK_SET);
 
-    if (e->verbose)
-        printf("[DBG] RETORNAR | profundidade agora=%d\n", e->call_depth);
+    if (s->verbose)
+        printf("[DBG] RETURN | depth now=%d\n", s->call_depth);
 }
 
-static void cmd_fimfuncao(Ctx *ctx) {
-    if (ctx->e->call_depth > 0)
-        cmd_retornar(ctx);
-}
+// --- Modules -----------------------------------------------------------------
 
-static void cmd_funcao(Ctx *ctx) {
-    char *tok;
-    while ((tok = proximo_token(ctx)) != NULL) (void)tok;
-}
+// LOAD and REPEAT are handled inline in axis_interpret_line()
+// These stubs exist so the dispatch table can reference them.
+static void cmd_load(Ctx *ctx)   { (void)ctx; }
+static void cmd_repeat(Ctx *ctx) { (void)ctx; }
+
+// --- System / Debug ----------------------------------------------------------
+
+static void cmd_exit(Ctx *ctx) { (void)ctx; exit(0); }
 
 static void cmd_debug(Ctx *ctx) {
-    ctx->e->verbose = 1;
-    printf("[DBG] Modo debug ativado.\n");
+    ctx->state->verbose = 1;
+    printf("[DBG] Debug mode enabled.\n");
 }
 
 static void cmd_nodebug(Ctx *ctx) {
-    ctx->e->verbose = 0;
+    ctx->state->verbose = 0;
 }
 
-static void cmd_rotulo(Ctx *ctx) {
-    proximo_token(ctx);
-}
+// =============================================================================
+//  Dispatch Table
+// =============================================================================
 
-static void cmd_carregar(Ctx *ctx) { (void)ctx; }
-static void cmd_repete(Ctx *ctx)   { (void)ctx; }
-
-// ═════════════════════════════════════════════════════════════════════════════
-//  Tabela de despacho
-// ═════════════════════════════════════════════════════════════════════════════
-
-static const EntradaComando TABELA[] = {
-    {"MAIS",       cmd_mais},
-    {"MENOS",      cmd_menos},
-    {"ZERAR",      cmd_zerar},
-    {"SOMA",       cmd_soma},
-    {"SOMAR",      cmd_soma},
-    {"SUBTRAIR",   cmd_subtrair},
-    {"SUBTRAI",    cmd_subtrair},
-    {"DIREITA",    cmd_direita},
-    {"ESQUERDA",   cmd_esquerda},
-    {"IR",         cmd_ir},
-    {"COPIAR",     cmd_copiar},
-    {"NOMEAR",     cmd_nomear},
-    {"PULAR",      cmd_pular},
-    {"SE_IGUAL",   cmd_se_igual},
-    {"SE_MENOR",   cmd_se_menor},
-    {"SE_MAIOR",   cmd_se_maior},
-    {"ROTULO",     cmd_rotulo},
-    {"ENTRADA",    cmd_entrada},
-    {"VALOR",      cmd_valor},
-    {"FALAR",      cmd_falar},
-    {"FUNCAO",     cmd_funcao},
-    {"FIMFUNCAO",  cmd_fimfuncao},
-    {"CHAMAR",     cmd_chamar},
-    {"RETORNAR",   cmd_retornar},
-    {"SAIR",       cmd_sair},
-    {"CARREGAR",   cmd_carregar},
-    {"REPETE",     cmd_repete},
-    {"DEBUG",      cmd_debug},
-    {"NODEBUG",    cmd_nodebug},
+static const CommandEntry COMMANDS[] = {
+    // Arithmetic
+    {"INC",     cmd_inc},
+    {"DEC",     cmd_dec},
+    {"CLEAR",   cmd_clear},
+    {"ADD",     cmd_add},
+    {"SUB",     cmd_sub},
+    // Tape navigation
+    {"NEXT",    cmd_next},
+    {"PREV",    cmd_prev},
+    {"SEEK",    cmd_seek},
+    // Memory
+    {"COPY",    cmd_copy},
+    // Variables
+    {"LET",     cmd_let},
+    // Control flow
+    {"MARK",    cmd_mark},
+    {"JUMP",    cmd_jump},
+    {"IF_EQ",   cmd_if_eq},
+    {"IF_LT",   cmd_if_lt},
+    {"IF_GT",   cmd_if_gt},
+    // I/O
+    {"READ",    cmd_read},
+    {"PRINT",   cmd_print},
+    {"SAY",     cmd_say},
+    // Functions
+    {"DEF",     cmd_def},
+    {"END",     cmd_end},
+    {"CALL",    cmd_call},
+    {"RETURN",  cmd_return},
+    // Modules
+    {"LOAD",    cmd_load},
+    {"REPEAT",  cmd_repeat},
+    // System
+    {"EXIT",    cmd_exit},
+    {"DEBUG",   cmd_debug},
+    {"NODEBUG", cmd_nodebug},
     {NULL, NULL}
 };
 
-static FnComando buscar_comando(const char *nome) {
-    for (int i = 0; TABELA[i].nome != NULL; i++) {
-        if (strcmp(TABELA[i].nome, nome) == 0)
-            return TABELA[i].fn;
+static CommandFn find_command(const char *name) {
+    for (int i = 0; COMMANDS[i].name != NULL; i++) {
+        if (strcmp(COMMANDS[i].name, name) == 0)
+            return COMMANDS[i].fn;
     }
     return NULL;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-//  Mapeamento de rótulos
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+//  Pre-scan: Labels
+// =============================================================================
 
-void axis_mapear_rotulos(EstadoAxis *e) {
-    char token[MAX_NOME];
+void axis_scan_labels(AxisState *s) {
+    char token[MAX_NAME];
 
-    rewind(e->arquivo);
+    rewind(s->file);
 
-    while (fscanf(e->arquivo, "%63s", token) != EOF) {
-        if (strcmp(token, "ROTULO") == 0) {
-            if (e->total_rotulos >= MAX_ROTULOS) {
-                fprintf(stderr, "ERRO AXIS: Limite de rotulos atingido!\n");
-                break;
-            }
-            if (fscanf(e->arquivo, "%63s", token) != 1) break;
-            { int c; while ((c = fgetc(e->arquivo)) != '\n' && c != EOF); }
-            long posicao = ftell(e->arquivo);
-            snprintf(e->rotulos[e->total_rotulos].nome, MAX_NOME, "%s", token);
-            e->rotulos[e->total_rotulos].posicao = posicao;
-            e->total_rotulos++;
+    while (fscanf(s->file, "%63s", token) != EOF) {
+        if (strcmp(token, "MARK") != 0) continue;
+
+        if (s->total_labels >= MAX_LABELS) {
+            fprintf(stderr, "AXIS ERROR: Label limit reached!\n");
+            break;
         }
+        if (fscanf(s->file, "%63s", token) != 1) break;
+
+        // Consume the rest of the line so position lands on the next line
+        { int c; while ((c = fgetc(s->file)) != '\n' && c != EOF); }
+
+        snprintf(s->labels[s->total_labels].name, MAX_NAME, "%s", token);
+        s->labels[s->total_labels].position = ftell(s->file);
+        s->total_labels++;
     }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-//  Mapeamento de funções
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+//  Pre-scan: Functions
+// =============================================================================
 
-void axis_mapear_funcoes(EstadoAxis *e) {
-    char linha[MAX_LINHA];
+void axis_scan_functions(AxisState *s) {
+    char line[MAX_LINE];
 
-    rewind(e->arquivo);
+    rewind(s->file);
 
-    while (fgets(linha, sizeof(linha), e->arquivo)) {
-        char *com = strchr(linha, '$');
-        if (com) *com = '\0';
+    while (fgets(line, sizeof(line), s->file)) {
+        // Strip comments
+        char *comment = strchr(line, '$');
+        if (comment) *comment = '\0';
 
         char *saveptr = NULL;
-        char *token = strtok_r(linha, " \t\n\r", &saveptr);
-        if (!token) continue;
-        if (strcmp(token, "FUNCAO") != 0) continue;
+        char *token = strtok_r(line, " \t\n\r", &saveptr);
+        if (!token || strcmp(token, "DEF") != 0) continue;
 
-        if (e->total_funcoes >= MAX_FUNCOES) {
-            fprintf(stderr, "ERRO AXIS: Limite de funcoes atingido!\n");
+        if (s->total_funcs >= MAX_FUNCS) {
+            fprintf(stderr, "AXIS ERROR: Function limit reached!\n");
             break;
         }
 
-        char *nome = strtok_r(NULL, " \t\n\r", &saveptr);
-        if (!nome) continue;
+        char *name = strtok_r(NULL, " \t\n\r", &saveptr);
+        if (!name) continue;
 
-        Funcao *fn = &e->funcoes[e->total_funcoes];
-        strncpy(fn->nome, nome, MAX_NOME - 1);
-        fn->nome[MAX_NOME - 1] = '\0';
+        Function *fn = &s->funcs[s->total_funcs];
+        strncpy(fn->name, name, MAX_NAME - 1);
+        fn->name[MAX_NAME - 1] = '\0';
         fn->total_params = 0;
 
         char *param;
         while ((param = strtok_r(NULL, " \t\n\r", &saveptr)) != NULL) {
             if (fn->total_params >= MAX_PARAMS) {
-                fprintf(stderr, "AVISO AXIS: Funcao '%s' excede %d parametros, ignorando extras\n",
-                        fn->nome, MAX_PARAMS);
+                fprintf(stderr, "AXIS WARNING: Function '%s' exceeds %d params, extras ignored\n",
+                        fn->name, MAX_PARAMS);
                 break;
             }
-            strncpy(fn->params[fn->total_params], param, MAX_NOME - 1);
-            fn->params[fn->total_params][MAX_NOME - 1] = '\0';
+            strncpy(fn->params[fn->total_params], param, MAX_NAME - 1);
+            fn->params[fn->total_params][MAX_NAME - 1] = '\0';
             fn->total_params++;
         }
 
-        fn->posicao = ftell(e->arquivo);
-        e->total_funcoes++;
+        fn->position = ftell(s->file);
+        s->total_funcs++;
     }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-//  Interpretação de linha
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+//  Line Interpreter
+// =============================================================================
 
-void axis_interpretar_linha(EstadoAxis *e, char *linha) {
-    // Remove \r para compatibilidade com arquivos Windows (CRLF) em modo binário
-    char *cr = strchr(linha, '\r');
+void axis_interpret_line(AxisState *s, char *line) {
+    // Normalize Windows line endings
+    char *cr = strchr(line, '\r');
     if (cr) *cr = '\n';
 
-    char *comentario = strchr(linha, '$');
-    if (comentario) *comentario = '\0';
+    // Strip comments
+    char *comment = strchr(line, '$');
+    if (comment) *comment = '\0';
 
-    int so_espacos = 1;
-    for (char *p = linha; *p; p++) {
-        if (!isspace((unsigned char)*p)) { so_espacos = 0; break; }
+    // Skip blank / whitespace-only lines
+    for (char *p = line; *p; p++) {
+        if (!isspace((unsigned char)*p)) goto not_blank;
     }
-    if (so_espacos) return;
+    return;
+not_blank:;
 
-    char linha_original[MAX_LINHA];
-    strncpy(linha_original, linha, MAX_LINHA - 1);
-    linha_original[MAX_LINHA - 1] = '\0';
+    // Keep a copy of the original line for REPEAT block parsing
+    char original[MAX_LINE];
+    strncpy(original, line, MAX_LINE - 1);
+    original[MAX_LINE - 1] = '\0';
 
     char *saveptr = NULL;
-    char *token = strtok_r(linha, " \t\n\r", &saveptr);
+    char *token = strtok_r(line, " \t\n\r", &saveptr);
 
     while (token != NULL) {
 
-        if (strcmp(token, "REPETE") == 0) {
-            char *vezes_str = strtok_r(NULL, " \t\n\r", &saveptr);
-            int vezes = vezes_str ? atoi(vezes_str) : 0;
-            char *inicio = strchr(linha_original, '[');
-            char *fim    = strrchr(linha_original, ']');
-            if (inicio && fim && fim > inicio) {
-                *fim = '\0';
-                char *bloco = inicio + 1;
-                for (int i = 0; i < vezes; i++) {
-                    char copia[MAX_LINHA];
-                    strncpy(copia, bloco, MAX_LINHA - 1);
-                    copia[MAX_LINHA - 1] = '\0';
+        // ── REPEAT ──────────────────────────────────────────────────────────
+        if (strcmp(token, "REPEAT") == 0) {
+            char *times_str = strtok_r(NULL, " \t\n\r", &saveptr);
+            int   times     = times_str ? atoi(times_str) : 0;
+            char *block_start = strchr(original, '[');
+            char *block_end   = strrchr(original, ']');
+
+            if (block_start && block_end && block_end > block_start) {
+                *block_end = '\0';
+                char *block = block_start + 1;
+
+                for (int i = 0; i < times; i++) {
+                    char copy[MAX_LINE];
+                    strncpy(copy, block, MAX_LINE - 1);
+                    copy[MAX_LINE - 1] = '\0';
+
                     char *sp2 = NULL;
-                    char *sub = strtok_r(copia, " \t\n\r", &sp2);
+                    char *sub = strtok_r(copy, " \t\n\r", &sp2);
                     while (sub) {
-                        Ctx ctx2 = {e, &sp2};
-                        FnComando fn = buscar_comando(sub);
-                        if (fn) { dbg(e, sub); fn(&ctx2); }
-                        else fprintf(stderr, "AVISO AXIS: Comando desconhecido em REPETE: '%s'\n", sub);
+                        Ctx inner = {s, &sp2};
+                        CommandFn fn = find_command(sub);
+                        if (fn) { debug_print(s, sub); fn(&inner); }
+                        else fprintf(stderr, "AXIS WARNING: Unknown command in REPEAT: '%s'\n", sub);
                         sub = strtok_r(NULL, " \t\n\r", &sp2);
                     }
                 }
             }
-            break;
+            return; // REPEAT always consumes the rest of the line
         }
 
-        if (strcmp(token, "CARREGAR") == 0) {
-            char *nome_arquivo = strtok_r(NULL, " \t\n\r", &saveptr);
-            if (nome_arquivo) {
-                FILE *arq_anterior = e->arquivo;
-                FILE *arq = fopen(nome_arquivo, "r");
-                if (arq) {
-                    e->arquivo = arq;
-                    axis_mapear_rotulos(e);
-                    axis_mapear_funcoes(e);
-                    rewind(arq);
-                    char linha_arq[MAX_LINHA];
-                    while (fgets(linha_arq, sizeof(linha_arq), arq))
-                        axis_interpretar_linha(e, linha_arq);
-                    fclose(arq);
-                    e->arquivo = arq_anterior;
-                } else {
-                    fprintf(stderr, "ERRO AXIS: Nao foi possivel abrir '%s'\n", nome_arquivo);
-                }
+        // ── LOAD ────────────────────────────────────────────────────────────
+        if (strcmp(token, "LOAD") == 0) {
+            char *filename = strtok_r(NULL, " \t\n\r", &saveptr);
+            if (!filename) return;
+
+            FILE *prev_file = s->file;
+            FILE *f = fopen(filename, "r");
+            if (!f) {
+                fprintf(stderr, "AXIS ERROR: Could not open '%s'\n", filename);
+                return;
             }
+
+            s->file = f;
+            axis_scan_labels(s);
+            axis_scan_functions(s);
+            rewind(f);
+
+            char sub_line[MAX_LINE];
+            while (fgets(sub_line, sizeof(sub_line), f))
+                axis_interpret_line(s, sub_line);
+
+            fclose(f);
+            s->file = prev_file;
             return;
         }
 
-        Ctx ctx = {e, &saveptr};
-        FnComando fn = buscar_comando(token);
+        // ── Normal command dispatch ──────────────────────────────────────────
+        Ctx ctx = {s, &saveptr};
+        CommandFn fn = find_command(token);
 
         if (fn) {
-            dbg(e, token);
+            debug_print(s, token);
             fn(&ctx);
-            if (strcmp(token, "FALAR")     == 0 ||
-                strcmp(token, "PULAR")     == 0 ||
-                strcmp(token, "SE_IGUAL")  == 0 ||
-                strcmp(token, "SE_MENOR")  == 0 ||
-                strcmp(token, "SE_MAIOR")  == 0 ||
-                strcmp(token, "RETORNAR")  == 0 ||
-                strcmp(token, "FIMFUNCAO") == 0 ||
-                strcmp(token, "FUNCAO")    == 0) {
+
+            // These commands consume the rest of the line themselves
+            if (strcmp(token, "SAY")    == 0 ||
+                strcmp(token, "JUMP")   == 0 ||
+                strcmp(token, "IF_EQ")  == 0 ||
+                strcmp(token, "IF_LT")  == 0 ||
+                strcmp(token, "IF_GT")  == 0 ||
+                strcmp(token, "RETURN") == 0 ||
+                strcmp(token, "END")    == 0 ||
+                strcmp(token, "DEF")    == 0) {
                 return;
             }
         } else {
-            fprintf(stderr, "AVISO AXIS: Comando desconhecido: '%s'\n", token);
+            fprintf(stderr, "AXIS WARNING: Unknown command: '%s'\n", token);
         }
 
         token = strtok_r(NULL, " \t\n\r", &saveptr);
     }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-//  Inicialização e execução
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+//  Initialization and Execution
+// =============================================================================
 
-void axis_init(EstadoAxis *e) {
-    memset(e, 0, sizeof(*e));
-    e->ptr       = e->fita;
-    e->prox_temp = TAPE_SIZE - 1;
+void axis_init(AxisState *s) {
+    memset(s, 0, sizeof(*s));
+    s->ptr       = s->tape;
+    s->next_temp = TAPE_SIZE - 1;
 }
 
-int axis_executar_arquivo(EstadoAxis *e, const char *caminho) {
-    e->arquivo = fopen(caminho, "rb");
-    if (!e->arquivo) {
-        fprintf(stderr, "ERRO AXIS: Nao foi possivel abrir '%s'\n", caminho);
+int axis_run_file(AxisState *s, const char *path) {
+    s->file = fopen(path, "rb");
+    if (!s->file) {
+        fprintf(stderr, "AXIS ERROR: Could not open '%s'\n", path);
         return -1;
     }
 
-    // Detecta encoding: rejeita UTF-16 (FF FE ou FE FF)
+    // Reject UTF-16 encoded files (BOM: FF FE or FE FF)
     {
-        unsigned char bom2[2] = {0};
-        if (fread(bom2, 1, 2, e->arquivo) == 2 &&
-            ((bom2[0] == 0xFF && bom2[1] == 0xFE) ||
-             (bom2[0] == 0xFE && bom2[1] == 0xFF))) {
-            fprintf(stderr, "ERRO AXIS: Arquivo em UTF-16. Salve como UTF-8 sem BOM.\n");
-            fclose(e->arquivo);
-            e->arquivo = NULL;
+        unsigned char bom[2] = {0};
+        if (fread(bom, 1, 2, s->file) == 2 &&
+            ((bom[0] == 0xFF && bom[1] == 0xFE) ||
+             (bom[0] == 0xFE && bom[1] == 0xFF))) {
+            fprintf(stderr, "AXIS ERROR: File is UTF-16. Save as UTF-8 without BOM.\n");
+            fclose(s->file);
+            s->file = NULL;
             return -1;
         }
-        rewind(e->arquivo);
+        rewind(s->file);
     }
 
-    axis_mapear_rotulos(e);
-    axis_mapear_funcoes(e);
-    rewind(e->arquivo);
+    axis_scan_labels(s);
+    axis_scan_functions(s);
+    rewind(s->file);
 
-    // Remove BOM UTF-8 (EF BB BF) se presente
+    // Skip UTF-8 BOM (EF BB BF) if present
     {
         unsigned char bom[3] = {0};
-        if (fread(bom, 1, 3, e->arquivo) == 3 &&
+        if (fread(bom, 1, 3, s->file) == 3 &&
             bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF) {
-            // BOM consumido, continua da posição atual
+            // BOM consumed — continue from current position
         } else {
-            rewind(e->arquivo); // Não era BOM, volta ao início
+            rewind(s->file);
         }
     }
 
-    char linha[MAX_LINHA];
-    while (fgets(linha, sizeof(linha), e->arquivo)) {
-        char copia[MAX_LINHA];
-        strncpy(copia, linha, MAX_LINHA - 1);
-        copia[MAX_LINHA - 1] = '\0';
-        char *com = strchr(copia, '$');
-        if (com) *com = '\0';
+    char line[MAX_LINE];
+    while (fgets(line, sizeof(line), s->file)) {
+        // Skip function bodies at the top level (call_depth == 0)
+        // They are only executed via CALL.
+        char copy[MAX_LINE];
+        strncpy(copy, line, MAX_LINE - 1);
+        copy[MAX_LINE - 1] = '\0';
+
+        char *comment = strchr(copy, '$');
+        if (comment) *comment = '\0';
 
         char *saveptr = NULL;
-        char *primeiro = strtok_r(copia, " \t\n\r", &saveptr);
-        if (primeiro && strcmp(primeiro, "FUNCAO") == 0 && e->call_depth == 0) {
-            while (fgets(linha, sizeof(linha), e->arquivo)) {
-                char *com2 = strchr(linha, '$');
-                if (com2) *com2 = '\0';
-                char *p = linha;
+        char *first = strtok_r(copy, " \t\n\r", &saveptr);
+        if (first && strcmp(first, "DEF") == 0 && s->call_depth == 0) {
+            // Fast-forward past the function body until END
+            while (fgets(line, sizeof(line), s->file)) {
+                char *c2 = strchr(line, '$');
+                if (c2) *c2 = '\0';
+                char *p = line;
                 while (*p == ' ' || *p == '\t') p++;
-                if (strncmp(p, "FIMFUNCAO", 9) == 0) break;
+                if (strncmp(p, "END", 3) == 0) break;
             }
             continue;
         }
 
-        long pos_antes = ftell(e->arquivo);
-        axis_interpretar_linha(e, linha);
-        // Se axis_interpretar_linha fez um fseek (ex: CHAMAR/RETORNAR),
-        // o próximo fgets deve continuar da nova posição — que já está certa.
-        // Se NÃO houve salto, a posição continua normal.
-        // Não precisamos fazer nada: fgets usa a posição atual do FILE*.
-        (void)pos_antes;
+        axis_interpret_line(s, line);
+        // Note: if axis_interpret_line performed a fseek (e.g. via CALL/RETURN),
+        // fgets will correctly continue from the new file position.
     }
 
-    fclose(e->arquivo);
-    e->arquivo = NULL;
+    fclose(s->file);
+    s->file = NULL;
     return 0;
 }

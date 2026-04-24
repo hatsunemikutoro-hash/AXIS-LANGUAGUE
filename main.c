@@ -4,19 +4,19 @@
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        fprintf(stderr, "Uso: axis <arquivo.axis> [-v]\n");
-        fprintf(stderr, "  -v   Modo debug (verbose)\n");
+        fprintf(stderr, "Usage: axis <file.axis> [-v]\n");
+        fprintf(stderr, "  -v   Debug mode (verbose)\n");
         return 1;
     }
 
-    EstadoAxis estado;
-    axis_init(&estado);
+    AxisState state;
+    axis_init(&state);
 
-    // Verifica flag -v para modo verbose/debug
+    // Check for -v flag to enable verbose/debug mode
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "-v") == 0)
-            estado.verbose = 1;
+            state.verbose = 1;
     }
 
-    return axis_executar_arquivo(&estado, argv[1]);
+    return axis_run_file(&state, argv[1]);
 }

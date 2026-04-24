@@ -1,5 +1,7 @@
-FUNCAO HELLO
-    FALAR "OI"
-FIMFUNCAO
+LET 0 contador
 
-C
+MARK loop
+    IF_EQ 10 end
+
+MARK end
+    EXIT

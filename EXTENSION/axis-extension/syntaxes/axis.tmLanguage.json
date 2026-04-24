@@ -18,22 +18,34 @@
     },
     {
       "name": "keyword.control.axis",
-      "match": "\\b(REPETE|CARREGAR|SAIR|ENTRADA|SE|SENAO|FIM)\\b"
+      "match": "\\b(REPEAT|LOAD|EXIT|IF_EQ|IF_LT|IF_GT|JUMP|DEF|END|CALL|RETURN|MARK)\\b"
     },
     {
-      "name": "keyword.operator.axis",
-      "match": "\\b(MAIS|MENOS|SOMA|ZERAR|DIREITA|ESQUERDA|IR|IGUAL|DIFERENTE)\\b"
+      "name": "keyword.operator.memory.axis",
+      "match": "\\b(NEXT|PREV|SEEK|COPY)\\b"
     },
     {
-      "name": "support.function.axis",
-      "match": "\\b(FALAR|VALOR|NOMEAR|LIMPAR|COR)\\b"
+      "name": "keyword.operator.arithmetic.axis",
+      "match": "\\b(INC|DEC|ADD|SUB|CLEAR)\\b"
+    },
+    {
+      "name": "support.function.io.axis",
+      "match": "\\b(READ|PRINT|SAY)\\b"
+    },
+    {
+      "name": "storage.type.axis",
+      "match": "\\bLET\\b"
+    },
+    {
+      "name": "variable.language.axis",
+      "match": "\\bDEBUG|NODEBUG\\b"
     },
     {
       "name": "constant.numeric.axis",
       "match": "\\b[0-9]+\\b"
     },
     {
-      "name": "variable.name.axis",
+      "name": "variable.other.axis",
       "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
     }
   ]

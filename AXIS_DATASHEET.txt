@@ -1,0 +1,262 @@
+AXIS LANGUAGE - DATASHEET
+=========================
+
+VERSION:      2.0
+STATUS:       Functional Interpretation Language
+CREATOR:      NIGHTZIN
+LAST UPDATED: 2026-04-21
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OVERVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AXIS is a low-level programming language inspired by the Brainfuck tape model,
+designed to give users direct control over memory manipulation. Unlike high-level
+languages that abstract away memory details, AXIS puts the programmer in direct
+control of a 30,000-cell memory tape where each cell holds an 8-bit unsigned
+integer (0-255) with circular overflow.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KEY FEATURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  - 30,000-cell memory tape (positions 0–29999)
+  - 8-bit cells with circular overflow (255 → 0, 0 → 255)
+  - Named variables (aliases for tape positions)
+  - Label-based control flow (loops, conditionals)
+  - Input/output capabilities
+  - Function support with parameter passing
+  - Module loading system
+  - Inline repetition constructs
+  - Debug / verbose mode
+  - English-language syntax
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MEMORY MODEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  TAPE_SIZE : 30,000 cells
+  CELL_SIZE : 8 bits (0–255)
+  OVERFLOW  : Circular  (255 + 1 = 0,  0 - 1 = 255)
+  POINTER   : Starts at position 0, movable via commands
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LIMITS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Maximum labels             : 512
+  Maximum variables          : 512
+  Maximum functions          : 128
+  Maximum function parameters: 16
+  Maximum call stack depth   : 64
+  Maximum name length        : 63 characters
+  Maximum line length        : 511 characters
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMMAND REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Comments start with $ and continue to end of line.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ ARITHMETIC                                                              │
+  ├──────────────────┬──────────────────────────────────────────────────────┤
+  │ INC              │ Increment active cell by 1  (+1)                     │
+  │ DEC              │ Decrement active cell by 1  (-1)                     │
+  │ CLEAR            │ Set active cell to 0                                 │
+  │ ADD <n|var>      │ Add n to active cell                                 │
+  │ SUB <n|var>      │ Subtract n from active cell                          │
+  └──────────────────┴──────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ TAPE NAVIGATION                                                         │
+  ├──────────────────┬──────────────────────────────────────────────────────┤
+  │ NEXT             │ Move pointer one cell to the right                   │
+  │ PREV             │ Move pointer one cell to the left                    │
+  │ SEEK <pos|var>   │ Move pointer to tape position or named variable      │
+  └──────────────────┴──────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ MEMORY OPERATIONS                                                       │
+  ├──────────────────┬──────────────────────────────────────────────────────┤
+  │ COPY <from> <to> │ Copy value from one position to another  (v2.0)      │
+  └──────────────────┴──────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ VARIABLE MANAGEMENT                                                     │
+  ├──────────────────┬──────────────────────────────────────────────────────┤
+  │ LET <pos> <name> │ Create a named alias for a tape position             │
+  └──────────────────┴──────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ CONTROL FLOW                                                            │
+  ├────────────────────────┬────────────────────────────────────────────────┤
+  │ MARK <name>            │ Declare a jump label                           │
+  │ JUMP <name>            │ Unconditional jump to label                    │
+  │ IF_EQ <n|var> <label>  │ Jump if active cell == n                       │
+  │ IF_LT <n|var> <label>  │ Jump if active cell <  n  (v2.0)               │
+  │ IF_GT <n|var> <label>  │ Jump if active cell >  n  (v2.0)               │
+  └────────────────────────┴────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ INPUT / OUTPUT                                                          │
+  ├──────────────────┬──────────────────────────────────────────────────────┤
+  │ READ             │ Read integer (0–255) from keyboard into active cell   │
+  │ PRINT            │ Print numeric value of active cell + newline         │
+  │ SAY "text"       │ Print a literal string + newline                     │
+  │ SAY              │ Print ASCII character of active cell value           │
+  └──────────────────┴──────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ REPETITION                                                              │
+  ├──────────────────────────┬──────────────────────────────────────────────┤
+  │ REPEAT <n> [cmd cmd ...] │ Execute command block exactly n times        │
+  └──────────────────────────┴──────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ MODULES                                                                 │
+  ├──────────────────┬──────────────────────────────────────────────────────┤
+  │ LOAD <file>      │ Load and interpret an external .axis file            │
+  └──────────────────┴──────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ FUNCTIONS                                                               │
+  ├────────────────────────────┬────────────────────────────────────────────┤
+  │ DEF <name> [params...]     │ Define a function                          │
+  │ CALL <name> [args...]      │ Call a function with arguments             │
+  │ RETURN                     │ Return from function explicitly            │
+  │ END                        │ End function body (implicit return)        │
+  └────────────────────────────┴────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ SYSTEM & DEBUG                                                          │
+  ├──────────────────┬──────────────────────────────────────────────────────┤
+  │ EXIT             │ Exit the interpreter immediately                     │
+  │ DEBUG            │ Enable verbose mode (shows CMD | PTR | VAL | DEPTH) │
+  │ NODEBUG          │ Disable verbose mode                                 │
+  └──────────────────┴──────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXAMPLE PROGRAMS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. Hello World
+     ───────────
+     SAY "Hello, World!"
+     EXIT
+
+  2. Counter 1 to 10
+     ────────────────
+     LET 0 counter
+     MARK loop
+       IF_EQ 11 done
+       PRINT
+       INC
+       JUMP loop
+     MARK done
+     EXIT
+
+  3. Alphabet A–Z
+     ─────────────
+     LET 0 letter
+     REPEAT 65 [INC]       $ start at ASCII 'A'
+     MARK loop
+       IF_GT 90 done        $ stop after 'Z'
+       SAY                  $ print current character
+       INC
+       JUMP loop
+     MARK done
+     EXIT
+
+  4. Value Copy
+     ───────────
+     LET 0 source
+     LET 5 dest
+     SEEK source
+     ADD 99
+     COPY 0 5               $ dest = source = 99
+     SEEK dest
+     PRINT                  $ prints 99
+     EXIT
+
+  5. Function Call
+     ──────────────
+     DEF add_two x y
+       ADD x
+       ADD y
+       PRINT
+     END
+
+     LET 0 a
+     LET 1 b
+     ADD 5
+     COPY 0 1               $ b = 5
+     ADD 3
+     COPY 0 0               $ a = 8
+     CALL add_two a b       $ prints 13
+     EXIT
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ERROR & WARNING MESSAGES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  AXIS ERROR: Label 'X' not found!             — undefined label referenced
+  AXIS ERROR: Invalid position in SEEK: N      — SEEK target out of bounds
+  AXIS ERROR: Label limit reached!             — exceeded 512 labels
+  AXIS ERROR: Variable limit reached!          — exceeded 512 variables
+  AXIS ERROR: Function 'X' not found!          — CALL to undefined function
+  AXIS ERROR: Recursion limit reached!         — call stack depth exceeded 64
+  AXIS ERROR: Parameter memory exhausted!      — temp tape region full
+  AXIS ERROR: Invalid input.                   — non-numeric value entered
+  AXIS ERROR: Could not open 'X'              — file not found for LOAD
+  AXIS ERROR: File is UTF-16. Save as UTF-8.  — unsupported encoding
+  AXIS WARNING: Right tape boundary reached!   — NEXT at end of tape
+  AXIS WARNING: Left tape boundary reached!    — PREV at start of tape
+  AXIS WARNING: Unknown command: 'X'           — unrecognized token
+  AXIS WARNING: RETURN outside a function.     — RETURN with no active call
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMPILATION & EXECUTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Build:        make
+  Run:          ./axis my_program.axis
+  Debug mode:   ./axis my_program.axis -v
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMPLEMENTATION DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  - Written in C (POSIX)
+  - Tape model with direct pointer arithmetic
+  - Two-pass execution: pre-scan maps labels and functions, then interprets
+  - Supports recursive function calls up to depth 64
+  - Parameter allocation grows backward from the end of the tape,
+    keeping user space and temp space separated
+  - UTF-8 encoding supported; UTF-16 files are rejected with a clear error
+  - Handles both Unix (LF) and Windows (CRLF) line endings
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  - Created for fun, not to be big or professional
+  - Designed for learning low-level programming concepts
+  - Extensible: adding new commands requires one entry in the dispatch table
+  - Community contributions welcome
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOURCE FILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  axis.h          — constants, structures, public API
+  axis.c          — interpreter implementation
+  main.c          — entry point
+  Makefile        — build instructions
+  README.md       — basic usage guide
+  EXTENSION/      — VS Code extension files
+    axis.tmLanguage.json        — syntax highlighting grammar
+    language-configuration.json — language settings
+    package.json                — extension metadata
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
