@@ -61,9 +61,11 @@ typedef struct {
     int            vars_on_enter[MAX_CALL_STACK];
     // Tape pointer at the time of each call (restored on RETURN)
     unsigned char *ptr_on_enter[MAX_CALL_STACK];
+    // Temp allocator position at the time of each call (restored on RETURN)
+    int            next_temp_on_enter[MAX_CALL_STACK]; // NEW
     int            call_depth;      // current call stack depth
 
-    // Next free cell for temporary parameter allocation.
+    // Next free cell for temporary parameter/VAR allocation.
     // Starts at the end of the tape and grows backward,
     // away from the user-accessible region.
     int   next_temp;

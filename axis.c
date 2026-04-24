@@ -143,6 +143,7 @@ static void cmd_seek(Ctx *ctx) {
         fprintf(stderr, "AXIS ERROR: Invalid position in SEEK: %d\n", pos);
 }
 
+
 // --- Memory Operations -------------------------------------------------------
 
 static void cmd_copy(Ctx *ctx) {
@@ -180,6 +181,35 @@ static void cmd_let(Ctx *ctx) {
     strncpy(s->vars[s->total_vars].name, name_str, MAX_NAME - 1);
     s->vars[s->total_vars].name[MAX_NAME - 1] = '\0';
     s->total_vars++;
+}
+
+// NEW: auto-allocate a temporary variable, scoped to the current call frame
+static void cmd_var(Ctx *ctx) {
+    AxisState *s = ctx->state;
+    char *name = next_token(ctx);
+    if (!name) {
+        fprintf(stderr, "AXIS ERROR: VAR requires a name\n");
+        return;
+    }
+    if (s->total_vars >= MAX_VARS) {
+        fprintf(stderr, "AXIS ERROR: Variable limit reached!\n");
+        return;
+    }
+
+    int cell = alloc_temp(s);
+    if (cell == -1) return;
+
+    // Optional initial value (defaults to 0)
+    char *val_str = next_token(ctx);
+    s->tape[cell] = val_str ? resolve_value(s, val_str) : 0;
+
+    s->vars[s->total_vars].address = cell;
+    strncpy(s->vars[s->total_vars].name, name, MAX_NAME - 1);
+    s->vars[s->total_vars].name[MAX_NAME - 1] = '\0';
+    s->total_vars++;
+
+    if (s->verbose)
+        printf("[DBG] VAR '%s' -> cell %d = %d\n", name, cell, s->tape[cell]);
 }
 
 // --- Control Flow ------------------------------------------------------------
@@ -304,9 +334,10 @@ static void cmd_call(Ctx *ctx) {
     }
 
     // Save caller context
-    s->call_stack[s->call_depth]      = ftell(s->file);
-    s->vars_on_enter[s->call_depth]   = s->total_vars;
-    s->ptr_on_enter[s->call_depth]    = s->ptr;
+    s->call_stack[s->call_depth]          = ftell(s->file);
+    s->vars_on_enter[s->call_depth]       = s->total_vars;
+    s->ptr_on_enter[s->call_depth]        = s->ptr;
+    s->next_temp_on_enter[s->call_depth]  = s->next_temp; // NEW: save temp allocator
     s->call_depth++;
 
     // Bind parameters as temporary variables
@@ -341,6 +372,7 @@ static void cmd_return(Ctx *ctx) {
     s->call_depth--;
     s->total_vars = s->vars_on_enter[s->call_depth];
     s->ptr        = s->ptr_on_enter[s->call_depth];
+    s->next_temp  = s->next_temp_on_enter[s->call_depth]; // NEW: restore temp allocator
 
     if (s->file)
         fseek(s->file, s->call_stack[s->call_depth], SEEK_SET);
@@ -388,6 +420,7 @@ static const CommandEntry COMMANDS[] = {
     {"COPY",    cmd_copy},
     // Variables
     {"LET",     cmd_let},
+    {"VAR",     cmd_var},   // NEW
     // Control flow
     {"MARK",    cmd_mark},
     {"JUMP",    cmd_jump},

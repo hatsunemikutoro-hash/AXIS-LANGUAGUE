@@ -34,7 +34,7 @@
     },
     {
       "name": "storage.type.axis",
-      "match": "\\bLET\\b"
+      "match": "\\b(LET|VAR)\\b"
     },
     {
       "name": "variable.language.axis",

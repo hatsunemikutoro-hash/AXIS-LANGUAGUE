@@ -1,7 +1,8 @@
-LET 0 contador
+DEF greet name
+    VAR greeting 72    $ auto-allocated, starts at 'H'
+    SEEK greeting
+    PRINT
+    $ greeting vanishes on RETURN, cell is reclaimed
+END
 
-MARK loop
-    IF_EQ 10 end
-
-MARK end
-    EXIT
+CALL greet 0

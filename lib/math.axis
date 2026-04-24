@@ -1,1 +1,7 @@
-SAY "Hello, world"!
+DEF SUM a b var
+    LET var out
+    SEEK out
+    ADD a
+    ADD b
+END
+
