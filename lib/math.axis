@@ -1,6 +1,4 @@
-DEF SUM a b var
-    LET var out
-    SEEK out
+DEF SUM a b
     ADD a
     ADD b
 END
