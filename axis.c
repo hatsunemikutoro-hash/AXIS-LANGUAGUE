@@ -143,6 +143,57 @@ static void cmd_seek(Ctx *ctx) {
         fprintf(stderr, "AXIS ERROR: Invalid position in SEEK: %d\n", pos);
 }
 
+static void cmd_seeki(Ctx *ctx) {
+    AxisState *s = ctx->state;
+    char *target = next_token(ctx);
+    if (!target) return;
+    int addr = resolve_address(s, target); // endereço da variável
+    int dest = s->tape[addr];              // valor DENTRO dela
+    if (dest >= 0 && dest < TAPE_SIZE)
+        s->ptr = &s->tape[dest];
+    else
+        fprintf(stderr, "AXIS ERROR: Invalid indirect address: %d\n", dest);
+}
+
+// SET <var> — salva o VALOR da célula atual dentro da variável
+static void cmd_set(Ctx *ctx) {
+    AxisState *s = ctx->state;
+    char *target = next_token(ctx);
+    if (!target) {
+        fprintf(stderr, "AXIS ERROR: SET requires a variable name\n");
+        return;
+    }
+    int addr = find_variable(s, target);
+    if (addr == -1) {
+        fprintf(stderr, "AXIS ERROR: SET: variable '%s' not found\n", target);
+        return;
+    }
+    s->tape[addr] = *s->ptr;
+    if (s->verbose)
+        printf("[DBG] SET '%s' = %d\n", target, (int)*s->ptr);
+}
+
+// STORE <var> — salva o ENDEREÇO atual do ptr dentro da variável
+static void cmd_store(Ctx *ctx) {
+    AxisState *s = ctx->state;
+    char *target = next_token(ctx);
+    if (!target) {
+        fprintf(stderr, "AXIS ERROR: STORE requires a variable name\n");
+        return;
+    }
+    int addr = find_variable(s, target);
+    if (addr == -1) {
+        fprintf(stderr, "AXIS ERROR: STORE: variable '%s' not found\n", target);
+        return;
+    }
+    int pos = (int)(s->ptr - s->tape);
+    if (pos > 255) {
+        fprintf(stderr, "AXIS WARNING: STORE: address %d truncated to 8 bits\n", pos);
+    }
+    s->tape[addr] = (unsigned char)pos;
+    if (s->verbose)
+        printf("[DBG] STORE '%s' = %d\n", target, pos);
+}
 
 // --- Memory Operations -------------------------------------------------------
 
@@ -416,6 +467,9 @@ static const CommandEntry COMMANDS[] = {
     {"NEXT",    cmd_next},
     {"PREV",    cmd_prev},
     {"SEEK",    cmd_seek},
+    {"SEEKI",   cmd_seeki},
+    {"SET",     cmd_set},
+    {"STORE",   cmd_store},
     // Memory
     {"COPY",    cmd_copy},
     // Variables

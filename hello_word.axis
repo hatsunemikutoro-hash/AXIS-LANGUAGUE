@@ -1,8 +1,81 @@
-DEF greet name
-    VAR greeting 72    $ auto-allocated, starts at 'H'
-    SEEK greeting
-    PRINT
-    $ greeting vanishes on RETURN, cell is reclaimed
+$ ─────────────────────────────────────────────────────
+$ STACK em AXIS
+$
+$ Layout:
+$   célula 0      → SP, começa em 10
+$   célula 1      → result (retorno de funções)
+$   células 10+   → dados da stack
+$ ─────────────────────────────────────────────────────
+
+LET 0 sp
+LET 1 result
+
+$ SP = 10
+SEEK sp
+CLEAR
+ADD 10
+
+$ ─── PUSH val ───────────────────────────────────────
+DEF push val
+    SEEKI sp         $ ptr → célula apontada por SP
+    CLEAR
+    ADD val          $ grava valor lá
+
+    SEEK sp
+    INC              $ SP++
 END
 
-CALL greet 0
+$ ─── POP ────────────────────────────────────────────
+$ valor removido fica em result
+DEF pop
+    SEEK sp
+    DEC              $ SP--
+
+    SEEKI sp         $ ptr → topo
+    SET result       $ result = valor do topo
+
+    SEEK sp          $ restaura ptr pro SP
+END
+
+$ ─── PEEK ───────────────────────────────────────────
+$ valor do topo fica em result
+DEF peek
+    VAR top
+
+    SEEK sp
+    DEC              $ tape[0] = SP-1
+    SET top          $ top = SP-1 (endereço do topo)
+    INC              $ restaura SP
+
+    SEEKI top        $ ptr → célula do topo
+    SET result       $ result = valor do topo
+
+    SEEK sp          $ restaura ptr
+END
+
+$ ─────────────────────────────────────────────────────
+$ PROGRAMA PRINCIPAL
+$ ─────────────────────────────────────────────────────
+
+CALL push 10
+CALL push 20
+CALL push 30
+
+SAY "peek (esperado 30):"
+CALL peek
+SEEK result
+PRINT
+
+CALL pop
+SAY "pop ok"
+SAY "peek depois de 1 pop (esperado 20):"
+CALL peek
+SEEK result
+PRINT
+
+CALL pop
+SAY "pop ok"
+SAY "peek depois de 2 pops (esperado 10):"
+CALL peek
+SEEK result
+PRINT
